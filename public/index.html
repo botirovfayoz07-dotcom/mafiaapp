@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Mafia</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-phase="lobby">
+  <div id="conn" hidden>Ulanmoqda…</div>
+
+  <!-- Bosh sahifa -->
+  <section id="home" class="screen">
+    <div class="home-top">
+      <h1>Mafia</h1>
+      <p class="lead">Shahar uxlaydi. Mafiya uyg‘onadi. Kim yolg‘on gapiryapti?</p>
+      <p class="stats" id="stats"></p>
+    </div>
+    <div class="home-actions">
+      <button id="create" class="primary">Yangi xona yaratish</button>
+      <div class="join">
+        <input id="code" placeholder="Xona kodi" maxlength="40" autocapitalize="characters" autocomplete="off" aria-label="Xona kodi">
+        <button id="join">Kirish</button>
+      </div>
+    </div>
+    <p class="rule">O‘yin davomida ilovadan chiqsangiz, rolingiz hammaga e’lon qilinadi va siz shu o‘yindan chiqarilasiz. Bu o‘yinchilarning ilova tashqarisida kelishib olishiga yo‘l qo‘ymaydi.</p>
+  </section>
+
+  <!-- Xona -->
+  <section id="room" class="screen" hidden>
+    <header id="head">
+      <div class="head-main">
+        <b id="phaseName">Kutish zali</b>
+        <span id="timer"></span>
+      </div>
+      <div class="head-side">
+        <button id="codeBtn" class="ghost" title="Kodni nusxalash"></button>
+        <button id="leave" class="ghost" aria-label="Xonadan chiqish">Chiqish</button>
+      </div>
+    </header>
+
+    <div class="panes">
+      <div id="pane-game" class="pane">
+        <div id="roleCard"></div>
+        <div id="action"></div>
+        <div id="players" class="list"></div>
+        <div id="result"></div>
+      </div>
+
+      <div id="pane-chat" class="pane chat" hidden>
+        <div id="log"></div>
+        <div class="composer">
+          <input id="msg" maxlength="300" autocomplete="off" aria-label="Xabar">
+          <button id="send" class="primary">Yuborish</button>
+        </div>
+      </div>
+
+      <div id="pane-voice" class="pane" hidden>
+        <p class="hint" id="voiceHint"></p>
+        <div class="voice-controls">
+          <button id="voiceJoin" class="primary">Ovozli chatga kirish</button>
+          <button id="micToggle" hidden>Mikrofonni o‘chirish</button>
+        </div>
+        <button id="unmute" hidden>Ovozni yoqish</button>
+        <div id="voiceList" class="list"></div>
+        <p class="hint">Tunda hamma uchun, o‘lganlar uchun va ovoz berish tugagandan keyin mikrofon avtomatik o‘chadi. Kunduzi tirik o‘yinchilar gaplasha oladi.</p>
+      </div>
+    </div>
+
+    <nav id="tabs">
+      <button data-tab="game" class="on">O‘yin</button>
+      <button data-tab="chat">Chat <i id="badge" hidden></i></button>
+      <button data-tab="voice">Ovoz</button>
+    </nav>
+  </section>
+
+  <div id="overlay" hidden></div>
+  <div id="toast" role="status"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

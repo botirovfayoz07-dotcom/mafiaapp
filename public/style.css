@@ -1,0 +1,131 @@
+:root {
+  --bg: #0c2420;
+  --panel: #12332d;
+  --line: #2a514a;
+  --ink: #ede6d6;
+  --mute: #8fa89f;
+  --accent: #c9a24b;
+  --on-accent: #0c2420;
+  --danger: #d4483f;
+}
+/* Tun: butun ilova qorong'ilashadi — dizaynning asosiy lahzasi */
+body[data-phase="night"] {
+  --bg: #0a1220;
+  --panel: #111d33;
+  --line: #25395c;
+  --mute: #8a9bb8;
+  --accent: #8fb4ff;
+  --on-accent: #0a1220;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 16px/1.45 'Source Sans 3', system-ui, sans-serif;
+  overscroll-behavior: none;
+  transition: background-color 1.2s, color 1.2s;
+}
+h1, b.big { font-family: 'Oswald', 'Arial Narrow', sans-serif; letter-spacing: .02em; }
+[hidden] { display: none !important; }
+.screen { height: 100dvh; display: flex; flex-direction: column; max-width: 560px; margin: 0 auto;
+  padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0); }
+
+button {
+  font: inherit; font-weight: 600; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer;
+  transition: background-color 1.2s, border-color 1.2s;
+}
+button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+button.ghost { background: transparent; padding: 6px 10px; font-weight: 400; color: var(--mute); }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+input {
+  font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; min-width: 0; flex: 1;
+}
+
+#conn { position: fixed; top: 0; left: 0; right: 0; z-index: 30; text-align: center; padding: 6px;
+  background: var(--danger); color: #fff; font-size: 14px; }
+
+/* Bosh sahifa */
+#home { padding: 28px 18px 18px; justify-content: space-between; }
+h1 { font-size: 64px; line-height: 1; color: var(--accent); }
+.lead { margin-top: 10px; font-size: 18px; max-width: 28ch; }
+.stats { margin-top: 14px; color: var(--mute); }
+.home-actions { display: grid; gap: 12px; }
+.join { display: flex; gap: 8px; }
+.rule { color: var(--mute); font-size: 14px; margin-top: 18px; }
+
+/* Xona */
+#head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.head-main { display: flex; align-items: baseline; gap: 10px; }
+#phaseName { font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 700; color: var(--accent); }
+#timer { font-variant-numeric: tabular-nums; color: var(--mute); }
+.head-side { display: flex; gap: 2px; }
+.panes { flex: 1; min-height: 0; position: relative; }
+.pane { position: absolute; inset: 0; overflow-y: auto; padding: 14px; }
+.pane.chat { display: flex; flex-direction: column; padding: 0; }
+#tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
+#tabs button { border: 0; border-radius: 0; background: transparent; color: var(--mute); padding: 14px 0; position: relative; }
+#tabs button.on { color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+#badge { font-style: normal; background: var(--danger); color: #fff; border-radius: 999px; font-size: 12px; padding: 1px 6px; margin-left: 4px; }
+
+/* Rol kartasi */
+.role { display: flex; align-items: center; gap: 14px; padding: 14px; margin-bottom: 12px;
+  border: 2px solid var(--accent); border-radius: 14px; background: var(--panel); }
+.role .emo { font-size: 38px; }
+.role b { font-family: 'Oswald', sans-serif; font-size: 22px; display: block; }
+.role small { color: var(--mute); display: block; }
+.note { padding: 12px 14px; margin-bottom: 12px; border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 10px 10px 0; }
+.note .row2 { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+.checks { margin-top: 8px; color: var(--mute); font-size: 14px; }
+
+/* Ro'yxat */
+.list { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
+.item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
+.item + .item { border-top: 1px solid var(--line); }
+.item .who { flex: 1; min-width: 0; }
+.item .who span { display: block; color: var(--mute); font-size: 13px; }
+.av { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  font-family: 'Oswald', sans-serif; background: var(--line); }
+.item.dead { opacity: .55; }
+.item.dead .nm { text-decoration: line-through; }
+.item.picked { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.item.speaking .av { box-shadow: 0 0 0 3px var(--accent); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #4caf7a; display: inline-block; margin-right: 6px; }
+.dot.off { background: var(--danger); }
+#result { margin-top: 14px; }
+#result h3 { font-family: 'Oswald', sans-serif; font-size: 20px; margin-bottom: 8px; color: var(--accent); }
+
+/* Chat */
+#log { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.m { max-width: 82%; padding: 8px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); overflow-wrap: anywhere; }
+.m .nm { display: block; font-size: 13px; color: var(--accent); font-weight: 600; }
+.m.mine { align-self: flex-end; background: color-mix(in srgb, var(--accent) 22%, var(--panel)); }
+.m.mafia { border-color: var(--danger); }
+.m.sys { align-self: center; max-width: 94%; text-align: center; background: transparent; border: 0; color: var(--mute); font-size: 14px; padding: 2px 0; }
+.composer { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--bg); }
+.composer input:disabled { opacity: .55; }
+
+/* Ovoz */
+.hint { color: var(--mute); font-size: 14px; margin: 4px 0 12px; }
+.voice-controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+#unmute { margin-bottom: 12px; }
+.pill { font-size: 13px; color: var(--mute); }
+
+/* Rol e'loni oynasi */
+#overlay { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 94%, #000);
+  display: grid; place-items: center; padding: 24px; text-align: center; }
+#overlay .card { border: 3px solid var(--accent); border-radius: 18px; padding: 32px 24px; max-width: 360px; background: var(--panel); }
+#overlay .emo { font-size: 72px; }
+#overlay h2 { font-family: 'Oswald', sans-serif; font-size: 34px; color: var(--accent); margin: 8px 0; }
+#overlay p { color: var(--ink); margin-bottom: 16px; }
+#overlay small { display: block; color: var(--mute); margin-bottom: 18px; }
+
+#toast { position: fixed; left: 16px; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom, 0)); z-index: 40;
+  max-width: 520px; margin: 0 auto; padding: 10px 14px; border-radius: 10px; background: var(--ink); color: var(--bg);
+  font-weight: 600; opacity: 0; pointer-events: none; }
+#toast.show { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) { body, button { transition: none; } }
