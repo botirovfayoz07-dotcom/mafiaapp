@@ -12,6 +12,7 @@ const REVEAL = FAST ? 0 : 4; // o'lim/osilish e'loni ko'rsatilayotgan vaqt: muho
 const GRACE = { away: 3, drop: 8 }; // ilovadan chiqqandan keyin necha soniyada o'yindan chiqariladi
 const MIN_PLAYERS = 4;
 const MAX_PLAYERS = 12;
+const BULLETS = 1; // komissarning butun o'yin uchun o'qlari soni
 
 const ROLES = {
   mafia: { n: 'Mafiya', e: '🕴', team: 'mafia' },
@@ -147,7 +148,7 @@ class Room {
       const n = this.night;
       if (p.role === 'mafia') return n.kill[p.id] || null;
       if (p.role === 'shifokor') return n.heal[p.id] || null;
-      if (p.role === 'komissar') return n.check[p.id] || null;
+      if (p.role === 'komissar') return n.check[p.id] || n.shoot[p.id] || null;
     }
     if (this.phase === 'vote' && p.id in this.votes) return this.votes[p.id] === null ? 'skip' : this.votes[p.id];
     return null;
@@ -168,6 +169,8 @@ class Room {
       me: me ? {
         id: uid, role: me.inGame ? me.role : null, alive: me.alive, spec: me.spec, out: me.out,
         pick: this.pickOf(me), checks: me.role === 'komissar' ? me.checks : [],
+        pickMode: me.role === 'komissar' && this.night ? (this.night.shoot[uid] ? 'shoot' : this.night.check[uid] ? 'check' : null) : null,
+        bullets: me.role === 'komissar' ? me.bullets : 0,
         canWrite: this.canWrite(uid, this.phase === 'night' ? 'mafia' : 'all'),
         canSpeak: this.canSpeak(uid), vc: this.voiceClass(uid), ghost: me.inGame || me.spec ? this.isGhost(me) : false,
       } : null,
@@ -191,7 +194,7 @@ class Room {
       if (this.list.length >= MAX_PLAYERS) return { error: 'Xona to‘lgan' };
       p = {
         id: user.id, name: user.name, online: true, inGame: false, alive: false, role: null,
-        out: false, spec: this.phase !== 'lobby', timer: null, lastMsg: 0, checks: [],
+        out: false, spec: this.phase !== 'lobby', timer: null, lastMsg: 0, checks: [], bullets: 0,
       };
       this.players.set(user.id, p);
       this.sys(p.spec ? `👁 ${p.name} tomosha qilmoqda.` : `➕ ${p.name} xonaga qo‘shildi.`);
@@ -242,6 +245,7 @@ class Room {
         delete this.night.kill[uid];
         delete this.night.heal[uid];
         delete this.night.check[uid];
+        delete this.night.shoot[uid];
       }
       delete this.votes[uid];
       if (this.checkWin()) return;
@@ -270,7 +274,9 @@ class Room {
     this.round = 0;
     ps.forEach((p, i) => {
       p.inGame = true; p.alive = true; p.spec = false; p.out = false; p.checks = [];
+      p.bullets = 0;
       p.role = roles[i];
+      if (p.role === 'komissar') p.bullets = BULLETS;
     });
     this.sys(`🎭 O‘yin boshlandi! ${n} o‘yinchi, ${this.mafiaN} ta mafiya, 1 komissar${n >= 5 ? ', 1 shifokor' : ''}.`);
     this.sys('⚠️ Ilovadan chiqsangiz, rolingiz e’lon qilinadi va o‘yindan chiqarilasiz.');
@@ -284,12 +290,12 @@ class Room {
     this.round++;
     this.phase = 'night';
     this.lastWord = null;
-    this.night = { kill: {}, heal: {}, check: {} };
-    this.sys(`🌙 ${this.round}-tun. Shahar uyquga ketdi. Mafiya, Shifokor va Komissar tanlov qiladi.`);
+    this.night = { kill: {}, heal: {}, check: {}, shoot: {} };
+    this.sys(`🌙 ${this.round}-tun. Shahar uyquga ketdi. Mafiya, Shifokor va Komissar tanlov qiladi (Komissar tekshiradi yoki otadi).`);
     this.arm(T.night, () => this.resolveNight());
     this.broadcast();
   }
-  action(uid, target) {
+  action(uid, target, mode) {
     const p = this.players.get(uid);
     const t = this.players.get(target);
     if (this.phase !== 'night' || !p || !p.inGame || !p.alive) return 'Hozir mumkin emas';
@@ -301,10 +307,16 @@ class Room {
     } else if (p.role === 'shifokor') {
       n.heal[uid] = target;
     } else if (p.role === 'komissar') {
-      if (n.check[uid]) return 'Bu tunda tekshirib bo‘ldingiz';
-      if (target === uid) return 'O‘zingizni tekshira olmaysiz';
-      n.check[uid] = target;
-      p.checks.push({ round: this.round, id: t.id, name: t.name, team: ROLES[t.role].team });
+      if (n.check[uid] || n.shoot[uid]) return 'Bu tunda tanlov qilib bo‘ldingiz';
+      if (target === uid) return 'O‘zingizni tanlay olmaysiz';
+      if (mode === 'shoot') {
+        if (p.bullets < 1) return 'O‘qingiz qolmadi';
+        p.bullets--;
+        n.shoot[uid] = target;
+      } else {
+        n.check[uid] = target;
+        p.checks.push({ round: this.round, id: t.id, name: t.name, team: ROLES[t.role].team });
+      }
     } else return 'Sizning tunda harakatingiz yo‘q';
     this.push(uid);
     return null;
@@ -324,12 +336,27 @@ class Room {
     this.phase = 'day';
     this.sys('☀️ Tong otdi.');
     let died = false;
+    // Komissarning o'qi: shifokor ham to'sa olmaydi
+    const shot = new Set(Object.values(n.shoot));
+    for (const id of shot) {
+      const t = this.players.get(id);
+      if (!t || !t.alive) continue;
+      t.alive = false;
+      died = true;
+      this.sys(`🔫 Komissar ${t.name}ni otdi. Roli: ${tag(t)}.`);
+      this.reveal(t, 'shot');
+    }
+    if (victim && !victim.alive) {
+      victim = null; // mafiya nishoni o'qdan o'lgan bo'lsa, ikki marta o'lmaydi
+    }
     if (!victim) {
-      this.sys('Bu tunda hech kim o‘lmadi.');
-      this.announce('reveal', { kind: 'none', emoji: '☀️', title: 'Tong otdi', text: 'Bu tunda hech kim o‘lmadi.' });
+      if (!died) {
+        this.sys('Bu tunda hech kim o‘lmadi.');
+        this.announce('reveal', { kind: 'none', emoji: '☀️', title: 'Tong otdi', text: 'Bu tunda hech kim o‘lmadi.' });
+      }
     } else if (Object.values(n.heal).includes(victim.id)) {
-      this.sys('💉 Shifokor kimnidir o‘lim changalidan qutqardi. Hech kim o‘lmadi.');
-      this.announce('reveal', { kind: 'none', emoji: '💉', title: 'Shifokor qutqardi', text: 'Mafiya hujum qildi, lekin hech kim o‘lmadi.' });
+      this.sys('💉 Shifokor kimnidir o‘lim changalidan qutqardi.');
+      if (!died) this.announce('reveal', { kind: 'none', emoji: '💉', title: 'Shifokor qutqardi', text: 'Mafiya hujum qildi, lekin hech kim o‘lmadi.' });
     } else {
       victim.alive = false;
       died = true;

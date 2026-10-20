@@ -14,7 +14,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 
 const ROLE = {
   mafia: { n: 'Mafiya', e: '🕴', d: 'Tunda mafiya jamoasi bilan kelishib, bir kishini o‘ldirasiz. Kunduzi o‘zingizni fuqarodek tuting.' },
-  komissar: { n: 'Komissar', e: '🕵️', d: 'Har tunda bir kishini tekshirasiz: mafiyami yoki tinch aholi.' },
+  komissar: { n: 'Komissar', e: '🕵️', d: 'Har tunda bir kishini tekshirasiz (mafiyami yoki tinch aholi) YOKI butun o‘yin davomida bitta o‘q bilan birovni otib o‘ldirasiz. Tunda bitta harakat. Xato odamni otsangiz, begunoh o‘ladi!' },
   shifokor: { n: 'Shifokor', e: '💉', d: 'Har tunda bir kishini (o‘zingizni ham) o‘limdan qutqara olasiz.' },
   fuqaro: { n: 'Fuqaro', e: '👤', d: 'Kunduzi muhokama qiling va ovoz berib mafiyani toping.' },
 };
@@ -195,7 +195,7 @@ function revealHTML(d, dur) {
       <h2>${esc(d.title || '')}</h2><p>${esc(d.text || '')}</p><i class="bar"></i></div>`;
   }
   const r = ROLE[d.role] || { e: '❔', n: '' };
-  const cause = { night: ['🌙', 'Tunda o‘ldirildi'], hang: ['⚖️', 'Osildi'], left: ['🚪', 'Ilovadan chiqdi'] }[d.cause] || ['💀', 'O‘yindan chiqdi'];
+  const cause = { night: ['🌙', 'Tunda o‘ldirildi'], hang: ['⚖️', 'Osildi'], shot: ['🔫', 'Komissar otib o‘ldirdi'], left: ['🚪', 'Ilovadan chiqdi'] }[d.cause] || ['💀', 'O‘yindan chiqdi'];
   const votes = d.cause === 'hang' && d.votes ? ` · ${d.votes} ovoz` : '';
   const me = d.id === myId;
   return `<div class="rcard ${d.team === 'mafia' ? 'mafia' : 'town'}" style="--dur:${dur}ms">
@@ -265,7 +265,7 @@ function actionHTML(s) {
     const t = {
       mafia: 'Kimni o‘ldiramiz? Mafiya bilan Chat tabida kelishing.',
       shifokor: 'Kimni qutqaramiz? O‘zingizni ham tanlashingiz mumkin.',
-      komissar: m.pick ? 'Natija sizga yuborildi, pastdagi tekshiruvlarga qarang.' : 'Kimni tekshiramiz?',
+      komissar: m.pick ? (m.pickMode === 'shoot' ? '🔫 Nishon tanlandi. Tong otganda o‘q uziladi.' : 'Natija sizga yuborildi, pastdagi tekshiruvlarga qarang.') : `Kimni tekshiramiz yoki otamiz? O‘qlar: ${m.bullets}.`,
       fuqaro: 'Tun. Hamma uxlayapti. Tongni kuting.',
     }[m.role];
     return note(t, checks);
@@ -308,8 +308,19 @@ function playerRow(p, s) {
   const picked = m && m.pick === p.id;
   const vcount = s.phase === 'vote' && s.votes ? Object.values(s.votes).filter((t) => t === p.id).length : 0;
   const verb = s.phase === 'vote' ? 'Ovoz' : { mafia: 'O‘ldirish', shifokor: 'Qutqarish', komissar: 'Tekshirish' }[m && m.role] || '';
-  const btn = canTarget(s, p) || (picked && s.phase !== 'lobby')
-    ? `<button data-target="${p.id}" class="${picked ? 'primary' : ''}" ${canTarget(s, p) ? '' : 'disabled'}>${picked ? '✓ ' : ''}${verb}</button>` : '';
+  const can = canTarget(s, p);
+  const mine = (mode) => picked && (m.pickMode || 'check') === mode;
+  let btn = '';
+  if (s.phase === 'night' && m && m.role === 'komissar') {
+    if (can || picked) {
+      btn = `<button data-target="${p.id}" data-mode="check" class="${mine('check') ? 'primary' : ''}" ${can ? '' : 'disabled'}>${mine('check') ? '✓ ' : ''}Tekshirish</button>`;
+      if (m.bullets > 0 || mine('shoot')) {
+        btn += `<button data-target="${p.id}" data-mode="shoot" class="${mine('shoot') ? 'primary' : ''}" ${can && m.bullets > 0 ? '' : 'disabled'}>${mine('shoot') ? '✓ ' : '🔫 '}Otish</button>`;
+      }
+    }
+  } else if (can || (picked && s.phase !== 'lobby')) {
+    btn = `<button data-target="${p.id}" class="${picked ? 'primary' : ''}" ${can ? '' : 'disabled'}>${picked ? '✓ ' : ''}${verb}</button>`;
+  }
   return `<div class="item ${dead ? 'dead' : ''} ${picked ? 'picked' : ''}" data-vid="${p.id}">
     <div class="av">${esc(p.name.slice(0, 1).toUpperCase())}</div>
     <div class="who"><b class="nm"><i class="dot ${p.online ? '' : 'off'}"></i>${esc(p.name)}</b><span>${sub.join(' · ')}</span></div>${vcount ? `<span class="vc" title="Ovozlar">${vcount}</span>` : ''}${btn}</div>`;
@@ -333,7 +344,7 @@ $('#players').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-target]');
   if (!b || !S) return;
   const target = Number(b.dataset.target);
-  socket.emit(S.phase === 'vote' ? 'vote' : 'action', { target });
+  socket.emit(S.phase === 'vote' ? 'vote' : 'action', { target, mode: b.dataset.mode });
   haptic('success');
 });
 

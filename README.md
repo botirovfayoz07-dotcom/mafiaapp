@@ -4,7 +4,7 @@ Butun o'yin Telegram ichidagi Mini App'da: xona, chat, ovozli chat. Bot faqat il
 
 ## Qoidalar (soddalashtirilgan)
 - Rollar: Mafiya, Komissar, Shifokor (5+ o'yinchida), Fuqaro. Kamida 4, ko'pi bilan 12 o'yinchi.
-- Tun: mafiya o'ldiradi, shifokor qutqaradi, komissar tekshiradi. Kunduz: muhokama (50 s), ovoz berish, osilganning so'nggi so'zi. Hamma ovoz bersa, ovoz berish erta tugaydi.
+- Tun: mafiya o'ldiradi, shifokor qutqaradi, komissar tekshiradi yoki otadi (butun o'yinga 1 ta o'q, tunda bitta harakat; o'qni shifokor to'sa olmaydi, `BULLETS` o'zgaruvchisi `game.js` da). Kunduz: muhokama (50 s), ovoz berish, osilganning so'nggi so'zi. Hamma ovoz bersa, ovoz berish erta tugaydi.
 - O'yin davomida ilovadan chiqqan (yopgan, fonga o'tgan, aloqasi 8 soniyadan ortiq uzilgan) o'yinchining roli hammaga e'lon qilinadi va u shu o'yindan chiqariladi. Keyingi o'yinda yana qatnashadi.
 - Chat: kunduz tirik o'yinchilar yozadi; tunda faqat mafiya o'zaro yozadi.
 - Rol e'loni: kimdir o'lganda, osilganda yoki ilovadan chiqqanda hammaga katta oynada uning roli ko'rsatiladi.

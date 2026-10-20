@@ -137,7 +137,7 @@ io.on('connection', (socket) => {
   });
   socket.on('action', (d) => {
     const r = cur();
-    const err = r && r.action(uid, Number(d?.target));
+    const err = r && r.action(uid, Number(d?.target), d?.mode === 'shoot' ? 'shoot' : 'check');
     if (err) socket.emit('err', err);
   });
   socket.on('vote', (d) => {
