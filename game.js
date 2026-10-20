@@ -7,7 +7,8 @@
 const FAST = !!process.env.FAST; // sinov uchun tez rejim
 const T = FAST
   ? { night: 0.3, discuss: 0.3, vote: 0.3, last: 0.2 }
-  : { night: 35, discuss: 75, vote: 30, last: 15 }; // soniyalarda
+  : { night: 35, discuss: 50, vote: 30, last: 15 }; // soniyalarda
+const REVEAL = FAST ? 0 : 4; // o'lim/osilish e'loni ko'rsatilayotgan vaqt: muhokama vaqtidan yeyilmasin
 const GRACE = { away: 3, drop: 8 }; // ilovadan chiqqandan keyin necha soniyada o'yindan chiqariladi
 const MIN_PLAYERS = 4;
 const MAX_PLAYERS = 12;
@@ -85,6 +86,13 @@ class Room {
     if (this.chat.length > 200) this.chat.shift();
     this.deliver(msg);
   }
+  announce(ev, data) {
+    for (const p of this.list) if (p.online) this.send(p.id, ev, data);
+  }
+  /** O'lim / osilish / chiqib ketish: rol hammaga katta oynada ko'rsatiladi */
+  reveal(p, cause, extra = {}) {
+    this.announce('reveal', { kind: 'death', cause, id: p.id, name: p.name, role: p.role, team: ROLES[p.role].team, ...extra });
+  }
   canWrite(uid, ch) {
     const p = this.players.get(uid);
     if (!p) return false;
@@ -94,14 +102,23 @@ class Room {
     if (this.phase === 'night') return p.role === 'mafia' && ch === 'mafia';
     return ch === 'all'; // day, vote
   }
-  canSpeak(uid) {
+  isGhost(p) { return !!(p.spec || (p.inGame && !p.alive)); }
+  /*
+   * Mikrofon qaysi kanalga uzatadi:
+   *  'pub'   — hamma eshitadi (kunduz tiriklar, so'nggi so'z, kutish zali)
+   *  'ghost' — faqat o'lganlar/tomoshabinlar eshitadi (o'lganlar o'zaro gaplashadi)
+   *  null    — mikrofon o'chiq (tunda tiriklar)
+   */
+  voiceClass(uid) {
     const p = this.players.get(uid);
-    if (!p) return false;
-    if (this.phase === 'lobby') return true;
-    if (this.phase === 'last') return uid === this.lastWord;
-    if (this.phase === 'day' || this.phase === 'vote') return p.inGame && p.alive && !p.spec;
-    return false; // tun
+    if (!p) return null;
+    if (this.phase === 'lobby') return 'pub';
+    if (this.phase === 'last' && uid === this.lastWord) return 'pub';
+    if (this.isGhost(p)) return 'ghost';
+    if ((this.phase === 'day' || this.phase === 'vote') && p.inGame && p.alive) return 'pub';
+    return null;
   }
+  canSpeak(uid) { return this.voiceClass(uid) !== null; }
   say(uid, text) {
     const p = this.players.get(uid);
     if (!p) return false;
@@ -140,17 +157,19 @@ class Room {
     const mate = me && me.inGame && me.role === 'mafia';
     const players = this.list.map((p) => {
       const open = this.phase !== 'lobby' && p.inGame && (!p.alive || p.id === uid || (mate && p.role === 'mafia'));
-      return { id: p.id, name: p.name, online: p.online, alive: p.alive, inGame: p.inGame, out: p.out, spec: p.spec, role: open ? p.role : null };
+      return { id: p.id, name: p.name, online: p.online, alive: p.alive, inGame: p.inGame, out: p.out, spec: p.spec, role: open ? p.role : null, ghost: this.isGhost(p), vc: this.voiceClass(p.id) };
     });
     return {
       id: this.id, phase: this.phase, round: this.round, until: this.until, now: Date.now(),
       host: this.host, min: MIN_PLAYERS, mafiaN: this.mafiaN, lastWord: this.lastWord,
       players, voice: [...this.voice], result: this.result,
+      // Ovoz berish ochiq: kim kimga ovoz bergani hammaga ko'rinadi
+      votes: this.phase === 'vote' ? Object.fromEntries(Object.entries(this.votes).map(([k, v]) => [k, v === null ? 'skip' : v])) : null,
       me: me ? {
         id: uid, role: me.inGame ? me.role : null, alive: me.alive, spec: me.spec, out: me.out,
         pick: this.pickOf(me), checks: me.role === 'komissar' ? me.checks : [],
         canWrite: this.canWrite(uid, this.phase === 'night' ? 'mafia' : 'all'),
-        canSpeak: this.canSpeak(uid),
+        canSpeak: this.canSpeak(uid), vc: this.voiceClass(uid), ghost: me.inGame || me.spec ? this.isGhost(me) : false,
       } : null,
     };
   }
@@ -218,6 +237,7 @@ class Room {
       p.alive = false;
       p.out = true;
       this.sys(`🚪 ${p.name} ilovadan chiqdi. Roli: ${tag(p)}. U shu o‘yindan chiqarildi.`);
+      this.reveal(p, 'left');
       if (this.night) {
         delete this.night.kill[uid];
         delete this.night.heal[uid];
@@ -303,15 +323,22 @@ class Room {
     this.night = null;
     this.phase = 'day';
     this.sys('☀️ Tong otdi.');
-    if (!victim) this.sys('Bu tunda hech kim o‘lmadi.');
-    else if (Object.values(n.heal).includes(victim.id)) this.sys('💉 Shifokor kimnidir o‘lim changalidan qutqardi. Hech kim o‘lmadi.');
-    else {
+    let died = false;
+    if (!victim) {
+      this.sys('Bu tunda hech kim o‘lmadi.');
+      this.announce('reveal', { kind: 'none', emoji: '☀️', title: 'Tong otdi', text: 'Bu tunda hech kim o‘lmadi.' });
+    } else if (Object.values(n.heal).includes(victim.id)) {
+      this.sys('💉 Shifokor kimnidir o‘lim changalidan qutqardi. Hech kim o‘lmadi.');
+      this.announce('reveal', { kind: 'none', emoji: '💉', title: 'Shifokor qutqardi', text: 'Mafiya hujum qildi, lekin hech kim o‘lmadi.' });
+    } else {
       victim.alive = false;
+      died = true;
       this.sys(`💀 ${victim.name} tunda o‘ldirildi. Roli: ${tag(victim)}.`);
+      this.reveal(victim, 'night');
     }
     if (this.checkWin()) return;
     this.sys(`Tirik: ${this.alive().map((p) => p.name).join(', ')}.`);
-    this.arm(T.discuss, () => this.startVote());
+    this.arm(T.discuss + (died ? REVEAL : 0), () => this.startVote());
     this.broadcast();
   }
 
@@ -326,13 +353,22 @@ class Room {
   vote(uid, target) {
     const p = this.players.get(uid);
     if (this.phase !== 'vote' || !p || !p.inGame || !p.alive) return 'Hozir ovoz bera olmaysiz';
-    if (target === 'skip' || target === null) this.votes[uid] = null;
+    let next;
+    if (target === 'skip' || target === null) next = null;
     else {
       const t = this.players.get(target);
       if (!t || !t.alive || !t.inGame || target === uid) return 'Nishon yaroqsiz';
-      this.votes[uid] = target;
+      next = target;
     }
-    this.push(uid);
+    if (uid in this.votes && this.votes[uid] === next) return null; // o'zgarmagan
+    this.votes[uid] = next;
+    this.sys(`🗳 ${p.name} → ${next === null ? 'hech kimga' : this.players.get(next).name}`);
+    // Hamma ovoz bersa, kutib o'tirmaymiz
+    if (this.alive().every((q) => q.id in this.votes) && this.until - Date.now() > 4000) {
+      this.sys('Hamma ovoz berdi. Natija 3 soniyadan so‘ng.');
+      this.arm(3, () => this.resolveVote());
+    }
+    this.broadcast();
     return null;
   }
   resolveVote() {
@@ -349,16 +385,18 @@ class Room {
 
     if (!entries.length || (entries[1] && entries[1][1] === entries[0][1])) {
       this.sys('⚖️ Ovozlar teng yoki yetarli emas — hech kim osilmadi.');
+      this.announce('reveal', { kind: 'none', emoji: '⚖️', title: 'Hech kim osilmadi', text: 'Ovozlar teng yoki yetarli emas.' });
       return this.startNight();
     }
     const victim = this.players.get(Number(entries[0][0]));
     victim.alive = false;
     this.sys(`⚖️ ${victim.name} osildi. Roli: ${tag(victim)}.`);
+    this.reveal(victim, 'hang', { votes: entries[0][1] });
     if (this.checkWin()) return;
     this.phase = 'last';
     this.lastWord = victim.id;
     this.sys(`🎤 ${victim.name}ning so‘nggi so‘zi (${T.last} soniya).`);
-    this.arm(T.last, () => this.startNight());
+    this.arm(T.last + REVEAL, () => this.startNight());
     this.broadcast();
   }
 

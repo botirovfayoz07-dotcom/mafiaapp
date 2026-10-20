@@ -43,6 +43,7 @@ const roleName = (r) => (ROLE[r] ? `${ROLE[r].e} ${ROLE[r].n}` : '');
 
 function showHome() {
   room = null; S = null;
+  revealQ.length = 0; revealOn = false; clearTimeout(revealTimer); $('#reveal').hidden = true;
   $('#home').hidden = false; $('#room').hidden = true;
   document.body.dataset.phase = 'lobby';
   tg && tg.disableClosingConfirmation && tg.disableClosingConfirmation();
@@ -77,6 +78,7 @@ socket.on('chat', (m) => {
   if (tab !== 'chat' && !m.sys) { unread++; renderBadge(); }
 });
 socket.on('role', (r) => { showRoleCard(r); haptic('success'); });
+socket.on('reveal', (d) => pushReveal(d));
 socket.on('state', (s) => {
   if (s.id !== room) return;
   S = s;
@@ -171,6 +173,61 @@ function showRoleCard(r) {
   $('#okRole').onclick = () => { o.hidden = true; };
 }
 
+/* ───────── O'lim / osilish: rol e'loni ───────── */
+const revealQ = [];
+let revealOn = false, revealTimer;
+function pushReveal(d) { revealQ.push(d); if (!revealOn) nextReveal(); }
+function nextReveal() {
+  clearTimeout(revealTimer);
+  const d = revealQ.shift(), el = $('#reveal');
+  if (!d) { revealOn = false; el.hidden = true; return; }
+  revealOn = true;
+  const dur = d.kind === 'death' ? 4500 : 2400;
+  el.innerHTML = revealHTML(d, dur);
+  el.hidden = false;
+  haptic(d.kind === 'death' ? 'warning' : 'success');
+  revealTimer = setTimeout(nextReveal, dur);
+}
+$('#reveal').onclick = nextReveal; // bosib o'tkazib yuborish mumkin
+function revealHTML(d, dur) {
+  if (d.kind !== 'death') {
+    return `<div class="rcard soft" style="--dur:${dur}ms"><div class="emo">${esc(d.emoji || '☀️')}</div>
+      <h2>${esc(d.title || '')}</h2><p>${esc(d.text || '')}</p><i class="bar"></i></div>`;
+  }
+  const r = ROLE[d.role] || { e: '❔', n: '' };
+  const cause = { night: ['🌙', 'Tunda o‘ldirildi'], hang: ['⚖️', 'Osildi'], left: ['🚪', 'Ilovadan chiqdi'] }[d.cause] || ['💀', 'O‘yindan chiqdi'];
+  const votes = d.cause === 'hang' && d.votes ? ` · ${d.votes} ovoz` : '';
+  const me = d.id === myId;
+  return `<div class="rcard ${d.team === 'mafia' ? 'mafia' : 'town'}" style="--dur:${dur}ms">
+    <div class="cause">${cause[0]} ${cause[1]}${votes}</div>
+    <div class="emo">${r.e}</div>
+    <h2>${esc(d.name)}${me ? ' (siz)' : ''}</h2>
+    <p class="rname">${r.n}</p>
+    <small>${d.team === 'mafia' ? 'Mafiya jamoasi' : 'Tinch aholi'}</small>
+    ${me && d.cause !== 'left' ? '<small class="ghosthint">👻 Endi o‘lganlar bilan ovozli chatda gaplasha olasiz.</small>' : ''}
+    <i class="bar"></i></div>`;
+}
+
+/* ───────── Ovozlar jadvali: kim kimga ovoz berdi ───────── */
+function voteBoard(s) {
+  if (s.phase !== 'vote' || !s.votes) return '';
+  const nameOf = (id) => { const p = s.players.find((x) => x.id === Number(id)); return p ? esc(p.name) : '?'; };
+  const voters = s.players.filter((p) => p.inGame && p.alive);
+  const by = {}, skip = [];
+  let voted = 0;
+  for (const [vid, t] of Object.entries(s.votes)) {
+    voted++;
+    if (t === 'skip') skip.push(vid); else (by[t] = by[t] || []).push(vid);
+  }
+  const rows = Object.entries(by).sort((a, b) => b[1].length - a[1].length)
+    .map(([t, v]) => `<div class="vrow"><b>${nameOf(t)}</b><span class="vn">${v.length}</span><span class="vby">← ${v.map(nameOf).join(', ')}</span></div>`);
+  if (skip.length) rows.push(`<div class="vrow skip"><b>Hech kimga</b><span class="vn">${skip.length}</span><span class="vby">← ${skip.map(nameOf).join(', ')}</span></div>`);
+  const waiting = voters.filter((p) => !(p.id in s.votes)).map((p) => esc(p.name));
+  return `<div class="board"><div class="bt">Ovozlar · ${voted}/${voters.length}</div>
+    ${rows.join('') || '<div class="vby" style="color:var(--mute)">Hali hech kim ovoz bermadi.</div>'}
+    ${waiting.length ? `<div class="wait">Hali ovoz bermagan: ${waiting.join(', ')}</div>` : ''}</div>`;
+}
+
 function renderGame() {
   const s = S, m = s.me;
   // Rol kartasi
@@ -182,6 +239,7 @@ function renderGame() {
   }
   $('#roleCard').innerHTML = rc;
   $('#action').innerHTML = actionHTML(s);
+  $('#board').innerHTML = voteBoard(s);
   $('#players').innerHTML = s.players.map((p) => playerRow(p, s)).join('');
   $('#result').innerHTML = resultHTML(s);
 }
@@ -248,12 +306,13 @@ function playerRow(p, s) {
   else if (p.role) sub.push(roleName(p.role));
   if (m && p.id === m.id) sub.unshift('siz');
   const picked = m && m.pick === p.id;
+  const vcount = s.phase === 'vote' && s.votes ? Object.values(s.votes).filter((t) => t === p.id).length : 0;
   const verb = s.phase === 'vote' ? 'Ovoz' : { mafia: 'O‘ldirish', shifokor: 'Qutqarish', komissar: 'Tekshirish' }[m && m.role] || '';
   const btn = canTarget(s, p) || (picked && s.phase !== 'lobby')
     ? `<button data-target="${p.id}" class="${picked ? 'primary' : ''}" ${canTarget(s, p) ? '' : 'disabled'}>${picked ? '✓ ' : ''}${verb}</button>` : '';
-  return `<div class="item ${dead ? 'dead' : ''} ${picked ? 'picked' : ''}">
+  return `<div class="item ${dead ? 'dead' : ''} ${picked ? 'picked' : ''}" data-vid="${p.id}">
     <div class="av">${esc(p.name.slice(0, 1).toUpperCase())}</div>
-    <div class="who"><b class="nm"><i class="dot ${p.online ? '' : 'off'}"></i>${esc(p.name)}</b><span>${sub.join(' · ')}</span></div>${btn}</div>`;
+    <div class="who"><b class="nm"><i class="dot ${p.online ? '' : 'off'}"></i>${esc(p.name)}</b><span>${sub.join(' · ')}</span></div>${vcount ? `<span class="vc" title="Ovozlar">${vcount}</span>` : ''}${btn}</div>`;
 }
 
 function resultHTML(s) {
@@ -329,7 +388,8 @@ setInterval(() => {
     m.an.getByteTimeDomainData(m.buf);
     let max = 0;
     for (const v of m.buf) max = Math.max(max, Math.abs(v - 128));
-    document.querySelectorAll(`[data-vid="${id}"]`).forEach((el) => el.classList.toggle('speaking', max > 12));
+    const on = max > 12 && audible(id);
+    document.querySelectorAll(`[data-vid="${id}"]`).forEach((el) => el.classList.toggle('speaking', on));
   });
 }, 150);
 
@@ -372,13 +432,14 @@ function dropPeer(id) {
 function makePeer(id, initiator) {
   dropPeer(id);
   const pc = new RTCPeerConnection({ iceServers: cfg.ice });
-  const peer = { pc, audio: null, pending: [] };
+  const peer = { pc, audio: null, pending: [], sender: null, sending: true };
   Voice.peers.set(id, peer);
-  Voice.stream.getTracks().forEach((t) => pc.addTrack(t, Voice.stream));
+  Voice.stream.getTracks().forEach((t) => { peer.sender = pc.addTrack(t, Voice.stream); });
   pc.onicecandidate = (e) => { if (e.candidate) socket.emit('voice:signal', { to: id, data: { candidate: e.candidate } }); };
   pc.ontrack = (e) => {
     const a = document.createElement('audio');
     a.autoplay = true; a.playsInline = true;
+    a.muted = !canHear(id);
     a.srcObject = e.streams[0];
     document.body.appendChild(a);
     a.play().catch(() => { $('#unmute').hidden = false; });
@@ -391,6 +452,7 @@ function makePeer(id, initiator) {
       .then((o) => pc.setLocalDescription(o))
       .then(() => socket.emit('voice:signal', { to: id, data: { sdp: pc.localDescription } }));
   }
+  applyMic(); // o'lgan/tirik qoidasini yangi ulanishga ham qo'llash
   return peer;
 }
 socket.on('voice:peers', (ids) => { if (Voice.on) ids.forEach((id) => makePeer(id, true)); });
@@ -416,18 +478,48 @@ socket.on('voice:signal', async ({ from, data }) => {
   } catch (e) { console.warn('voice signal', e); }
 });
 
-/** Mikrofon faqat o'yin qoidalari ruxsat bergan paytda ochiq */
+/*
+ * Kim kimni eshitadi:
+ *  p.vc === 'pub'   — hamma eshitadi;
+ *  p.vc === 'ghost' — faqat o'lganlar (ghost) eshitadi.
+ * Qoida ikki tomonda qo'llanadi: jo'natuvchi ruxsat berilmagan odamlarga ovozni umuman yubormaydi,
+ * qabul qiluvchi ham ruxsat berilmagan ovozni o'chirib qo'yadi.
+ */
+const pinfo = (id) => (S ? S.players.find((p) => p.id === id) : null);
+function canHear(id) {
+  const m = S && S.me, p = pinfo(id);
+  if (!m || !p || !p.vc) return false;
+  return p.vc === 'pub' || !!m.ghost;
+}
+function canSendTo(id) {
+  const m = S && S.me, p = pinfo(id);
+  if (!m || !m.vc || Voice.muted) return false;
+  return m.vc === 'pub' || !!(p && p.ghost);
+}
+const audible = (id) => (id === myId ? !!(S && S.me && S.me.vc) && !Voice.muted : canHear(id));
+
 function applyMic() {
   if (!Voice.stream) return;
-  const ok = !!(S && S.me && S.me.canSpeak) && !Voice.muted;
-  Voice.stream.getAudioTracks().forEach((t) => { t.enabled = ok; });
+  const track = Voice.stream.getAudioTracks()[0];
+  const on = !!(S && S.me && S.me.vc) && !Voice.muted;
+  Voice.stream.getAudioTracks().forEach((t) => { t.enabled = on; });
+  Voice.peers.forEach((peer, id) => {
+    const want = canSendTo(id);
+    if (peer.sender && track && peer.sending !== want) {
+      peer.sending = want;
+      peer.sender.replaceTrack(want ? track : null).catch(() => {});
+    }
+    if (peer.audio) peer.audio.muted = !canHear(id);
+  });
   renderVoice();
 }
 function micStatus() {
+  const m = S && S.me;
   if (Voice.muted) return 'Siz mikrofonni o‘chirgansiz.';
-  if (S && S.me && S.me.canSpeak) return 'Mikrofon yoqilgan, sizni eshitishmoqda.';
+  if (!m) return '';
+  if (m.vc === 'ghost') return '👻 Siz o‘lgansiz: sizni faqat o‘lganlar eshitadi, siz esa hammani eshitasiz.';
+  if (m.vc === 'pub') return m.ghost ? 'So‘nggi so‘zingiz: hamma sizni eshitmoqda.' : 'Mikrofon yoqilgan, sizni eshitishmoqda.';
   if (S.phase === 'night') return 'Tun: mikrofon o‘chiq.';
-  if (S.me && !S.me.alive) return 'Siz o‘lgansiz: mikrofon o‘chiq.';
   return 'Hozir gapirish mumkin emas.';
 }
 function renderVoice() {
@@ -436,12 +528,11 @@ function renderVoice() {
   $('#micToggle').hidden = !Voice.on;
   $('#micToggle').textContent = Voice.muted ? 'Mikrofonni yoqish' : 'Mikrofonni o‘chirish';
   $('#voiceHint').textContent = Voice.on ? micStatus() : 'Ovozli chatga kirib, xonadagilar bilan gaplashing. Birinchi marta mikrofonga ruxsat so‘raladi.';
-  $('#voiceList').innerHTML = S.voice.length
-    ? S.voice.map((id) => {
-      const p = S.players.find((x) => x.id === id);
-      return `<div class="item" data-vid="${id}"><div class="av">${esc(p ? p.name.slice(0, 1).toUpperCase() : '?')}</div>
-        <div class="who"><b class="nm">${esc(p ? p.name : '')}${id === myId ? ' (siz)' : ''}</b></div></div>`;
-    }).join('')
+  const inVoice = S.voice.map((id) => S.players.find((x) => x.id === id)).filter(Boolean)
+    .sort((a, b) => Number(a.ghost) - Number(b.ghost));
+  $('#voiceList').innerHTML = inVoice.length
+    ? inVoice.map((p) => `<div class="item ${p.ghost ? 'ghostly' : ''}" data-vid="${p.id}"><div class="av">${esc(p.name.slice(0, 1).toUpperCase())}</div>
+        <div class="who"><b class="nm">${esc(p.name)}${p.id === myId ? ' (siz)' : ''}</b>${p.ghost ? '<span>👻 o‘lgan</span>' : ''}</div></div>`).join('')
     : '<div class="item"><div class="who"><span>Hozir ovozli chatda hech kim yo‘q.</span></div></div>';
 }
 $('#voiceJoin').onclick = () => (Voice.on ? voiceStop() : voiceJoin());

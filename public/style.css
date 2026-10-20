@@ -128,4 +128,46 @@ h1 { font-size: 64px; line-height: 1; color: var(--accent); }
   font-weight: 600; opacity: 0; pointer-events: none; }
 #toast.show { opacity: 1; }
 
-@media (prefers-reduced-motion: reduce) { body, button { transition: none; } }
+/* Ovozlar jadvali: kim kimga ovoz berdi */
+.board { margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.board .bt { font-family: 'Oswald', sans-serif; font-size: 16px; color: var(--accent); margin-bottom: 6px; }
+.vrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline; padding: 6px 0; }
+.vrow + .vrow { border-top: 1px solid var(--line); }
+.vrow b { overflow-wrap: anywhere; }
+.vrow .vn { font-family: 'Oswald', sans-serif; font-size: 20px; color: var(--accent); }
+.vrow .vby { grid-column: 1 / -1; color: var(--mute); font-size: 14px; }
+.vrow.skip b { color: var(--mute); font-weight: 600; }
+.board .wait { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); color: var(--mute); font-size: 14px; }
+.vc { min-width: 26px; text-align: center; font-family: 'Oswald', sans-serif; font-size: 16px; padding: 2px 8px;
+  border-radius: 999px; background: var(--accent); color: var(--on-accent); }
+.item.ghostly .av { border: 2px dashed var(--mute); }
+.item.speaking .av { box-shadow: 0 0 0 3px var(--accent); }
+
+/* O'lim / osilish: rol e'loni (hamma ko'radi) */
+#reveal { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; padding: 24px; cursor: pointer;
+  background: color-mix(in srgb, var(--bg) 88%, #000); animation: fade .25s ease-out; }
+.rcard { position: relative; overflow: hidden; width: min(360px, 100%); text-align: center; padding: 26px 22px 30px;
+  border: 3px solid var(--accent); border-radius: 20px; background: var(--panel); animation: pop .45s cubic-bezier(.2, 1.3, .4, 1); }
+.rcard.mafia { border-color: var(--danger); }
+.rcard .cause { font-size: 15px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mute); }
+.rcard .emo { font-size: 92px; line-height: 1.15; margin: 8px 0 2px; animation: flip .7s ease-out; }
+.rcard h2 { font-family: 'Oswald', sans-serif; font-size: 32px; line-height: 1.15; overflow-wrap: anywhere; }
+.rcard .rname { font-family: 'Oswald', sans-serif; font-size: 26px; margin-top: 2px; color: var(--accent); }
+.rcard.mafia .rname { color: var(--danger); }
+.rcard small { display: block; color: var(--mute); margin-top: 6px; }
+.rcard .ghosthint { margin-top: 14px; color: var(--ink); }
+.rcard.soft .emo { font-size: 64px; }
+.rcard.soft p { margin-top: 6px; color: var(--mute); }
+.rcard .bar { position: absolute; left: 0; bottom: 0; height: 5px; width: 100%; background: var(--accent);
+  transform-origin: left; animation: drain var(--dur, 4s) linear forwards; }
+.rcard.mafia .bar { background: var(--danger); }
+@keyframes fade { from { opacity: 0; } }
+@keyframes pop { from { transform: scale(.7); opacity: 0; } }
+@keyframes flip { from { transform: rotateY(90deg) scale(.5); opacity: 0; } 60% { opacity: 1; } }
+@keyframes drain { to { transform: scaleX(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  body, button { transition: none; }
+  #reveal, .rcard, .rcard .emo { animation: none; }
+  .rcard .bar { animation-duration: 0s; transform: scaleX(0); }
+}

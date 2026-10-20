@@ -45,6 +45,7 @@
       <div id="pane-game" class="pane">
         <div id="roleCard"></div>
         <div id="action"></div>
+        <div id="board"></div>
         <div id="players" class="list"></div>
         <div id="result"></div>
       </div>
@@ -65,7 +66,7 @@
         </div>
         <button id="unmute" hidden>Ovozni yoqish</button>
         <div id="voiceList" class="list"></div>
-        <p class="hint">Tunda hamma uchun, o‘lganlar uchun va ovoz berish tugagandan keyin mikrofon avtomatik o‘chadi. Kunduzi tirik o‘yinchilar gaplasha oladi.</p>
+        <p class="hint">Kunduzi tirik o‘yinchilar gaplashadi, tunda ularning mikrofoni o‘chadi. 👻 O‘lganlar esa istalgan vaqt faqat o‘zaro gaplasha oladi: tiriklar ularni eshitmaydi, o‘lganlar tiriklarni eshitadi.</p>
       </div>
     </div>
 
@@ -77,6 +78,7 @@
   </section>
 
   <div id="overlay" hidden></div>
+  <div id="reveal" hidden role="alertdialog" aria-live="assertive"></div>
   <div id="toast" role="status"></div>
 
   <script src="/socket.io/socket.io.js"></script>
