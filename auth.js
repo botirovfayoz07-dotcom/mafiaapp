@@ -30,7 +30,7 @@ function verifyInitData(initData, botToken, maxAgeSec = 86400) {
 function devUser(name) {
   const clean = String(name).slice(0, 20);
   const h = crypto.createHash('sha1').update(clean).digest().readUInt32BE(0);
-  return { id: 1_000_000_000 + (h % 1_000_000_000), name: clean };
+  return { id: 1_000_000_000 + (h % 1_000_000_000), name: clean, dev: true };
 }
 
 module.exports = { verifyInitData, devUser };

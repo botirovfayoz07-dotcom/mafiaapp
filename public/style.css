@@ -79,7 +79,7 @@ h1 { font-size: 64px; line-height: 1; color: var(--accent); }
 .role small { color: var(--mute); display: block; }
 .note { padding: 12px 14px; margin-bottom: 12px; border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 10px 10px 0; }
 .note .row2 { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
-.checks { margin-top: 8px; color: var(--mute); font-size: 14px; }
+
 
 /* Ro'yxat */
 .list { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
@@ -128,46 +128,120 @@ h1 { font-size: 64px; line-height: 1; color: var(--accent); }
   font-weight: 600; opacity: 0; pointer-events: none; }
 #toast.show { opacity: 1; }
 
-/* Ovozlar jadvali: kim kimga ovoz berdi */
-.board { margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
-.board .bt { font-family: 'Oswald', sans-serif; font-size: 16px; color: var(--accent); margin-bottom: 6px; }
-.vrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline; padding: 6px 0; }
-.vrow + .vrow { border-top: 1px solid var(--line); }
-.vrow b { overflow-wrap: anywhere; }
-.vrow .vn { font-family: 'Oswald', sans-serif; font-size: 20px; color: var(--accent); }
-.vrow .vby { grid-column: 1 / -1; color: var(--mute); font-size: 14px; }
-.vrow.skip b { color: var(--mute); font-weight: 600; }
-.board .wait { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); color: var(--mute); font-size: 14px; }
-.vc { min-width: 26px; text-align: center; font-family: 'Oswald', sans-serif; font-size: 16px; padding: 2px 8px;
-  border-radius: 999px; background: var(--accent); color: var(--on-accent); }
-.item.ghostly .av { border: 2px dashed var(--mute); }
-.item.speaking .av { box-shadow: 0 0 0 3px var(--accent); }
+@media (prefers-reduced-motion: reduce) { body, button { transition: none; } }
 
-/* O'lim / osilish: rol e'loni (hamma ko'radi) */
-#reveal { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; padding: 24px; cursor: pointer;
-  background: color-mix(in srgb, var(--bg) 88%, #000); animation: fade .25s ease-out; }
-.rcard { position: relative; overflow: hidden; width: min(360px, 100%); text-align: center; padding: 26px 22px 30px;
-  border: 3px solid var(--accent); border-radius: 20px; background: var(--panel); animation: pop .45s cubic-bezier(.2, 1.3, .4, 1); }
-.rcard.mafia { border-color: var(--danger); }
-.rcard .cause { font-size: 15px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mute); }
-.rcard .emo { font-size: 92px; line-height: 1.15; margin: 8px 0 2px; animation: flip .7s ease-out; }
-.rcard h2 { font-family: 'Oswald', sans-serif; font-size: 32px; line-height: 1.15; overflow-wrap: anywhere; }
-.rcard .rname { font-family: 'Oswald', sans-serif; font-size: 26px; margin-top: 2px; color: var(--accent); }
-.rcard.mafia .rname { color: var(--danger); }
-.rcard small { display: block; color: var(--mute); margin-top: 6px; }
-.rcard .ghosthint { margin-top: 14px; color: var(--ink); }
-.rcard.soft .emo { font-size: 64px; }
-.rcard.soft p { margin-top: 6px; color: var(--mute); }
-.rcard .bar { position: absolute; left: 0; bottom: 0; height: 5px; width: 100%; background: var(--accent);
-  transform-origin: left; animation: drain var(--dur, 4s) linear forwards; }
-.rcard.mafia .bar { background: var(--danger); }
-@keyframes fade { from { opacity: 0; } }
-@keyframes pop { from { transform: scale(.7); opacity: 0; } }
-@keyframes flip { from { transform: rotateY(90deg) scale(.5); opacity: 0; } 60% { opacity: 1; } }
-@keyframes drain { to { transform: scaleX(0); } }
+/* ───────── Yangi: profil, admin, sahnalar, natija kartochkalari ───────── */
+.home-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px; }
+.mebtn { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 6px; border-radius: 999px; text-align: left; }
+.mebtn-t { display: flex; flex-direction: column; line-height: 1.2; }
+.mebtn-t small { color: var(--mute); font-weight: 400; }
+#adminBtn { border-color: var(--accent); color: var(--accent); }
+.subhead { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.subhead b { font-family: 'Oswald', sans-serif; font-size: 20px; color: var(--accent); }
+.scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; }
+.av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.av { overflow: hidden; }
+.av.big { width: 68px; height: 68px; font-size: 28px; }
+.av.dead { filter: grayscale(1); }
+.hero { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.hero small { color: var(--mute); }
+.wallet { padding: 16px; border: 1px solid var(--accent); border-radius: 14px; background: var(--panel); margin-bottom: 14px; display: grid; gap: 4px; }
+.wallet b { font-size: 30px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.wallet small, .hint { color: var(--mute); font-size: 13px; }
+.ghost-b { margin-top: 8px; font-weight: 400; font-size: 14px; }
+.stat3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 6px; }
+.stat3.four { grid-template-columns: repeat(2, 1fr); margin-bottom: 12px; }
+.stat3 > div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center; }
+.stat3 b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.stat3 small { color: var(--mute); font-size: 12px; }
+.sec { margin: 18px 0 8px; font-size: 16px; }
+.shop { display: flex; gap: 12px; align-items: center; padding: 12px; margin-bottom: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.shop .who { flex: 1; min-width: 0; }
+.shop .who span, .shop .who small { display: block; color: var(--mute); font-size: 13px; }
+.shop .emo, .emo-s { font-size: 28px; }
+.emo-s { font-size: 22px; }
+.shop .col { display: grid; gap: 6px; }
+.shop button, .shopadm button { padding: 8px 10px; font-size: 13px; }
+.item.clickable { cursor: pointer; }
+.plus { color: #6fcf8f; } .minus { color: var(--danger); }
+button.danger { background: var(--danger); border-color: var(--danger); color: #fff; width: 100%; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.role-d { padding: 10px 12px; }
+.role-d + .role-d { border-top: 1px solid var(--line); }
+.role-d summary { cursor: pointer; font-weight: 600; }
+.role-d summary small { color: var(--mute); font-weight: 400; margin-left: 6px; }
+.role-d p { margin-top: 6px; color: var(--mute); font-size: 14px; }
+.warn { color: #ffb4a8; margin-top: 8px; }
+.sel { margin-top: 8px; color: var(--accent); font-size: 14px; }
 
-@media (prefers-reduced-motion: reduce) {
-  body, button { transition: none; }
-  #reveal, .rcard, .rcard .emo { animation: none; }
-  .rcard .bar { animation-duration: 0s; transform: scaleX(0); }
-}
+/* Maxfiy ma'lumotlar */
+.intel { margin-bottom: 12px; padding: 10px 12px; border: 1px dashed var(--accent); border-radius: 10px; font-size: 14px; }
+.intel p { margin-top: 4px; }
+.intel small { color: var(--mute); }
+.m.dm { color: var(--accent); }
+
+/* Ovoz / tanlov chiplari */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 22%, transparent); border: 1px solid var(--accent); white-space: nowrap; }
+.chip.kill { background: color-mix(in srgb, var(--danger) 28%, transparent); border-color: var(--danger); }
+.vcount { min-width: 28px; height: 28px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center; font-weight: 700; background: var(--accent); color: var(--on-accent); font-variant-numeric: tabular-nums; }
+
+/* Natija kartochkalari */
+.rc { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; background: var(--panel); }
+.rc h4 { font-size: 15px; margin-bottom: 8px; color: var(--accent); }
+.rc-night { border-color: var(--danger); }
+.drow { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.drow div { flex: 1; } .drow small { display: block; color: var(--mute); }
+.skull { font-size: 24px; }
+.quiet, .esc { color: var(--mute); font-size: 14px; margin-top: 4px; }
+.vrow { margin-bottom: 10px; }
+.vhead { display: flex; justify-content: space-between; align-items: center; }
+.bar { height: 8px; border-radius: 6px; background: var(--line); margin: 5px 0; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 6px; }
+.vrow.top .bar i { background: var(--danger); }
+.hang { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.m.cardmsg { max-width: 100%; }
+
+/* Sahnalar */
+.scene { position: relative; height: 140px; border-radius: 14px; overflow: hidden; margin-bottom: 12px; border: 1px solid var(--line); }
+.scene svg { width: 100%; height: 100%; display: block; }
+.scene .cap { position: absolute; left: 10px; bottom: 8px; padding: 3px 10px; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff; font-size: 12px; }
+.scene-gif { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.scene.night, .scene.lobby { background: linear-gradient(#050b1c, #16284f); }
+.scene.day { background: linear-gradient(#5db4ff, #cfeeff); }
+.scene.vote { background: linear-gradient(#2b1740, #e0794a); }
+.tw { fill: #fff; animation: tw 2.4s ease-in-out infinite; }
+.win { fill: #ffd76a; } .winD { fill: #d6ecff; }
+.blink { animation: blink 3.5s steps(1) infinite; }
+.glow { animation: glow 4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.shoot { animation: shoot 7s linear infinite; opacity: 0; }
+.fog { animation: fog 16s ease-in-out infinite alternate; } .fog.f2 { animation-duration: 22s; }
+.walker { animation: walk 16s linear infinite; transform: translate(-20px, 148px); }
+.rays { transform-origin: 320px 45px; animation: spin 40s linear infinite; }
+.cloud { animation: drift linear infinite; }
+.bird { animation: fly 14s linear infinite; } .bird.b2 { animation-duration: 19s; }
+.beam { transform-origin: 200px 30px; animation: sway 3.2s ease-in-out infinite alternate; }
+.ballot { animation: fall 3.6s linear infinite; }
+.fan { animation: bob 3s ease-in-out infinite; }
+@keyframes tw { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
+@keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: .15 } }
+@keyframes glow { 0%,100% { transform: scale(1) } 50% { transform: scale(1.18) } }
+@keyframes shoot { 0% { transform: translate(60px,10px); opacity: 0 } 3% { opacity: 1 } 12% { transform: translate(230px,70px); opacity: 0 } 100% { opacity: 0 } }
+@keyframes fog { from { transform: translateX(-30px) } to { transform: translateX(40px) } }
+@keyframes walk { from { transform: translate(-20px, 148px) } to { transform: translate(420px, 148px) } }
+@keyframes spin { to { transform: rotate(360deg) } }
+@keyframes drift { from { transform: translateX(-60px) } to { transform: translateX(460px) } }
+@keyframes fly { from { transform: translate(-30px, 70px) } 50% { transform: translate(200px, 55px) } to { transform: translate(440px, 75px) } }
+@keyframes sway { from { transform: rotate(-7deg) } to { transform: rotate(7deg) } }
+@keyframes fall { from { transform: translateY(0) rotate(0) } to { transform: translateY(165px) rotate(200deg) } }
+@keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+@media (prefers-reduced-motion: reduce) { .scene * { animation: none !important; } }
+
+/* To'liq ekran effekt (tun natijasi, ovozlar) */
+#fx { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.72); animation: fxin .3s ease; overflow-y: auto; }
+.fxcard { width: min(440px, 100%); max-height: 100%; overflow-y: auto; background: var(--panel); border: 2px solid var(--accent); border-radius: 18px; padding: 12px; }
+.fxcard .scene { height: 160px; }
+.fxt { text-align: center; margin: 4px 0 10px; font-family: 'Oswald', sans-serif; color: var(--accent); }
+.fxs { text-align: center; color: var(--mute); margin-bottom: 8px; }
+.fxcard button.primary { width: 100%; }
+@keyframes fxin { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: none } }

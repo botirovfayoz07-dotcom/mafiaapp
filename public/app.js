@@ -12,12 +12,6 @@ const socket = io({ auth });
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const ROLE = {
-  mafia: { n: 'Mafiya', e: '🕴', d: 'Tunda mafiya jamoasi bilan kelishib, bir kishini o‘ldirasiz. Kunduzi o‘zingizni fuqarodek tuting.' },
-  komissar: { n: 'Komissar', e: '🕵️', d: 'Har tunda bir kishini tekshirasiz (mafiyami yoki tinch aholi) YOKI butun o‘yin davomida bitta o‘q bilan birovni otib o‘ldirasiz. Tunda bitta harakat. Xato odamni otsangiz, begunoh o‘ladi!' },
-  shifokor: { n: 'Shifokor', e: '💉', d: 'Har tunda bir kishini (o‘zingizni ham) o‘limdan qutqara olasiz.' },
-  fuqaro: { n: 'Fuqaro', e: '👤', d: 'Kunduzi muhokama qiling va ovoz berib mafiyani toping.' },
-};
 const PHASE = { lobby: 'Kutish zali', night: 'Tun', day: 'Muhokama', vote: 'Ovoz berish', last: 'So‘nggi so‘z' };
 
 let S = null;          // oxirgi holat
@@ -41,15 +35,21 @@ function toast(t) {
 const haptic = (k) => tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred(k);
 const roleName = (r) => (ROLE[r] ? `${ROLE[r].e} ${ROLE[r].n}` : '');
 
+const SCREENS = ['home', 'profile', 'admin', 'room'];
+function show(name) {
+  SCREENS.forEach((n) => { $('#' + n).hidden = n !== name; });
+  if (tg && tg.BackButton) {
+    if (name === 'profile' || name === 'admin') { tg.BackButton.show(); tg.BackButton.onClick(showHome); } else { tg.BackButton.hide(); tg.BackButton.offClick(showHome); }
+  }
+}
 function showHome() {
-  room = null; S = null;
-  revealQ.length = 0; revealOn = false; clearTimeout(revealTimer); $('#reveal').hidden = true;
-  $('#home').hidden = false; $('#room').hidden = true;
+  room = null; S = null; sceneKey_ = ''; hideFx();
+  show('home');
   document.body.dataset.phase = 'lobby';
   tg && tg.disableClosingConfirmation && tg.disableClosingConfirmation();
 }
 function showRoom() {
-  $('#home').hidden = true; $('#room').hidden = false;
+  show('room');
   $('#log').innerHTML = '';
   setTab('game');
   // Ilova yopilishidan oldin tasdiq so'raydi
@@ -60,7 +60,7 @@ function showRoom() {
 socket.on('connect', () => {
   $('#conn').hidden = true;
   if (room) join(room);
-  else if (startParam && !autoTried) { autoTried = true; join(startParam); }
+  else if (startParam && startParam !== 'profile' && !autoTried) { autoTried = true; join(startParam); }
   if (Voice.on) voiceRejoin();
 });
 socket.on('disconnect', () => { $('#conn').textContent = 'Ulanmoqda…'; $('#conn').hidden = false; });
@@ -69,22 +69,24 @@ socket.on('connect_error', (e) => {
   $('#conn').hidden = false;
 });
 socket.on('config', (c) => { cfg = Object.assign(cfg, c); myId = c.id; });
-socket.on('me', (m) => { $('#stats').textContent = m.games ? `${m.wins} g‘alaba, ${m.games} o‘yin` : ''; });
 socket.on('kicked', () => { voiceStop(); showHome(); toast('Ilova boshqa qurilmada ochildi'); });
 socket.on('err', (t) => { toast(t); haptic('error'); });
 socket.on('history', (list) => { $('#log').innerHTML = ''; list.forEach(addMsg); });
 socket.on('chat', (m) => {
   addMsg(m);
+  if (m.card) showCardFx(m.card);
   if (tab !== 'chat' && !m.sys) { unread++; renderBadge(); }
 });
 socket.on('role', (r) => { showRoleCard(r); haptic('success'); });
-socket.on('reveal', (d) => pushReveal(d));
 socket.on('state', (s) => {
   if (s.id !== room) return;
+  const prev = S;
   S = s;
   clockOff = s.now - Date.now();
   document.body.dataset.phase = s.phase;
-  renderHead(); renderGame(); renderChatInput(); renderVoice(); applyMic();
+  if (!prev || prev.phase !== s.phase || prev.round !== s.round) pairSel = [];
+  phaseFx(prev, s);
+  renderHead(); renderScene(); renderGame(); renderChatInput(); renderVoice(); applyMic();
 });
 
 function join(id) {
@@ -158,91 +160,128 @@ function setTab(t) {
 document.querySelectorAll('#tabs button').forEach((b) => { b.onclick = () => setTab(b.dataset.tab); });
 function renderBadge() { const b = $('#badge'); b.hidden = !unread; b.textContent = unread; }
 
+/* ───────── Sahna va effektlar ───────── */
+let sceneKey_ = '';
+function renderScene() {
+  const k = sceneKey(S.phase);
+  if (k !== sceneKey_) { sceneKey_ = k; $('#scene').innerHTML = sceneHTML(k, ''); }
+  const el = $('#scene .cap') || (() => { const c = document.createElement('span'); c.className = 'cap'; $('#scene .scene').appendChild(c); return c; })();
+  el.textContent = SCENE_CAP[k];
+}
+let fxTimer;
+function hideFx() { clearTimeout(fxTimer); $('#fx').hidden = true; }
+function showFx(html, ms, button = true) {
+  const f = $('#fx');
+  f.innerHTML = `<div class="fxcard">${html}${button ? '<button class="primary" id="fxOk">Davom etish</button>' : ''}</div>`;
+  f.hidden = false;
+  clearTimeout(fxTimer);
+  fxTimer = setTimeout(hideFx, ms);
+  const ok = $('#fxOk');
+  if (ok) ok.onclick = hideFx;
+}
+$('#fx').addEventListener('click', (e) => { if (e.target.id === 'fx') hideFx(); });
+function phaseFx(prev, s) {
+  if (!prev || prev.phase === s.phase || prev.phase === 'lobby') return;
+  if (s.phase === 'night' && $('#overlay').hidden) {
+    showFx(`${sceneHTML('night', '')}<h3 class="fxt">🌙 ${s.round}-tun</h3><p class="fxs">Shahar uyquga ketdi…</p>`, 2600, false);
+  }
+}
+function showCardFx(c) {
+  if ($('#overlay').hidden === false) return;
+  if (c.kind === 'night') {
+    showFx(`${sceneHTML('day', '')}<h3 class="fxt">☀️ Tong otdi</h3>${cardHTML(c)}`, 9000);
+  } else if (c.kind === 'votes') {
+    showFx(`${sceneHTML('vote', '')}<h3 class="fxt">🗳 Ovoz natijalari</h3>${cardHTML(c)}`, 11000);
+  }
+}
+
+/* ───────── Natija kartochkalari (tun / ovoz) ───────── */
+const cap1 = (n) => esc(String(n).slice(0, 1).toUpperCase());
+function cardHTML(c) {
+  if (c.kind === 'night') {
+    const rows = c.deaths.map((d) => `<div class="drow"><span class="av dead">${cap1(d.name)}</span>
+      <div><b>${esc(d.name)}</b><small>${roleName(d.role)} · ${d.cause === 'guard' ? 'mijozini himoya qilib halok bo‘ldi' : 'tunda o‘ldirildi'}</small></div><span class="skull">💀</span></div>`).join('');
+    const e = c.esc || {};
+    const extra = [e.saved ? '💉 Shifokor kimnidir o‘lim changalidan qutqardi.' : '', e.shield ? '🛡 Kimdir himoya qalqoni bilan qutuldi.' : '', e.lucky ? '🤞 Kimningdir omadi keldi.' : '']
+      .filter(Boolean).map((t) => `<p class="esc">${t}</p>`).join('');
+    return `<div class="rc rc-night"><h4>🌙 ${c.round}-tun natijasi</h4>
+      ${rows || '<p class="quiet">Bu tunda hech kim o‘lmadi.</p>'}${extra}</div>`;
+  }
+  if (c.kind === 'votes') {
+    const max = Math.max(1, ...c.rows.map((r) => r.total));
+    const rows = c.rows.map((r) => `<div class="vrow ${c.hanged && c.hanged.id === r.id ? 'top' : ''}">
+      <div class="vhead"><b>${esc(r.name)}</b><span class="vcount">${r.total}</span></div>
+      <div class="bar"><i style="width:${Math.round((r.total / max) * 100)}%"></i></div>
+      <div class="chips">${r.voters.map((v) => `<span class="chip">${esc(v.name)}${v.w > 1 ? ` ×${v.w}` : ''}</span>`).join('')}</div></div>`).join('');
+    const out = c.hanged
+      ? `<p class="hang">⚖️ <b>${esc(c.hanged.name)}</b> osildi. Roli: ${roleName(c.hanged.role)}</p>`
+      : '<p class="hang">⚖️ Ovozlar teng yoki yetarli emas — hech kim osilmadi.</p>';
+    return `<div class="rc rc-votes"><h4>🗳 ${c.round}-kun: kim kimga ovoz berdi</h4>
+      ${rows || '<p class="quiet">Hech kim ovoz bermadi.</p>'}
+      ${c.skips.length ? `<p class="esc">Hech kimga: ${c.skips.map(esc).join(', ')}</p>` : ''}
+      ${c.none.length ? `<p class="esc">Ovoz bermadi: ${c.none.map(esc).join(', ')}</p>` : ''}${out}</div>`;
+  }
+  return '';
+}
+function renderRecap() {
+  const s = S;
+  let h = '';
+  if ((s.phase === 'day' || s.phase === 'vote') && s.lastNight) h = cardHTML(s.lastNight);
+  else if ((s.phase === 'last' || s.phase === 'night') && s.lastVote) h = cardHTML(s.lastVote);
+  $('#recap').innerHTML = h;
+}
+
 /* ───────── O'yin tabi ───────── */
+let pairSel = [];
+let polMode = 'check';
+const nameOf = (id) => { const p = S && S.players.find((x) => x.id === id); return p ? esc(p.name) : '?'; };
+
 function showRoleCard(r) {
   if (!ROLE[r]) return;
   const o = $('#overlay');
   o.innerHTML = `<div class="card">
     <div class="emo">${ROLE[r].e}</div>
-    <small>Sizning rolingiz</small>
+    <small>Sizning rolingiz · ${TEAM[ROLE[r].team]}</small>
     <h2>${ROLE[r].n}</h2>
     <p>${ROLE[r].d}</p>
     <small>Ilovadan chiqsangiz, rolingiz e’lon qilinadi va o‘yindan chiqarilasiz.</small>
     <button class="primary" id="okRole">Tushunarli</button></div>`;
   o.hidden = false;
+  hideFx();
   $('#okRole').onclick = () => { o.hidden = true; };
-}
-
-/* ───────── O'lim / osilish: rol e'loni ───────── */
-const revealQ = [];
-let revealOn = false, revealTimer;
-function pushReveal(d) { revealQ.push(d); if (!revealOn) nextReveal(); }
-function nextReveal() {
-  clearTimeout(revealTimer);
-  const d = revealQ.shift(), el = $('#reveal');
-  if (!d) { revealOn = false; el.hidden = true; return; }
-  revealOn = true;
-  const dur = d.kind === 'death' ? 4500 : 2400;
-  el.innerHTML = revealHTML(d, dur);
-  el.hidden = false;
-  haptic(d.kind === 'death' ? 'warning' : 'success');
-  revealTimer = setTimeout(nextReveal, dur);
-}
-$('#reveal').onclick = nextReveal; // bosib o'tkazib yuborish mumkin
-function revealHTML(d, dur) {
-  if (d.kind !== 'death') {
-    return `<div class="rcard soft" style="--dur:${dur}ms"><div class="emo">${esc(d.emoji || '☀️')}</div>
-      <h2>${esc(d.title || '')}</h2><p>${esc(d.text || '')}</p><i class="bar"></i></div>`;
-  }
-  const r = ROLE[d.role] || { e: '❔', n: '' };
-  const cause = { night: ['🌙', 'Tunda o‘ldirildi'], hang: ['⚖️', 'Osildi'], shot: ['🔫', 'Komissar otib o‘ldirdi'], left: ['🚪', 'Ilovadan chiqdi'] }[d.cause] || ['💀', 'O‘yindan chiqdi'];
-  const votes = d.cause === 'hang' && d.votes ? ` · ${d.votes} ovoz` : '';
-  const me = d.id === myId;
-  return `<div class="rcard ${d.team === 'mafia' ? 'mafia' : 'town'}" style="--dur:${dur}ms">
-    <div class="cause">${cause[0]} ${cause[1]}${votes}</div>
-    <div class="emo">${r.e}</div>
-    <h2>${esc(d.name)}${me ? ' (siz)' : ''}</h2>
-    <p class="rname">${r.n}</p>
-    <small>${d.team === 'mafia' ? 'Mafiya jamoasi' : 'Tinch aholi'}</small>
-    ${me && d.cause !== 'left' ? '<small class="ghosthint">👻 Endi o‘lganlar bilan ovozli chatda gaplasha olasiz.</small>' : ''}
-    <i class="bar"></i></div>`;
-}
-
-/* ───────── Ovozlar jadvali: kim kimga ovoz berdi ───────── */
-function voteBoard(s) {
-  if (s.phase !== 'vote' || !s.votes) return '';
-  const nameOf = (id) => { const p = s.players.find((x) => x.id === Number(id)); return p ? esc(p.name) : '?'; };
-  const voters = s.players.filter((p) => p.inGame && p.alive);
-  const by = {}, skip = [];
-  let voted = 0;
-  for (const [vid, t] of Object.entries(s.votes)) {
-    voted++;
-    if (t === 'skip') skip.push(vid); else (by[t] = by[t] || []).push(vid);
-  }
-  const rows = Object.entries(by).sort((a, b) => b[1].length - a[1].length)
-    .map(([t, v]) => `<div class="vrow"><b>${nameOf(t)}</b><span class="vn">${v.length}</span><span class="vby">← ${v.map(nameOf).join(', ')}</span></div>`);
-  if (skip.length) rows.push(`<div class="vrow skip"><b>Hech kimga</b><span class="vn">${skip.length}</span><span class="vby">← ${skip.map(nameOf).join(', ')}</span></div>`);
-  const waiting = voters.filter((p) => !(p.id in s.votes)).map((p) => esc(p.name));
-  return `<div class="board"><div class="bt">Ovozlar · ${voted}/${voters.length}</div>
-    ${rows.join('') || '<div class="vby" style="color:var(--mute)">Hali hech kim ovoz bermadi.</div>'}
-    ${waiting.length ? `<div class="wait">Hali ovoz bermagan: ${waiting.join(', ')}</div>` : ''}</div>`;
 }
 
 function renderGame() {
   const s = S, m = s.me;
-  // Rol kartasi
   let rc = '';
   if (m && m.role && s.phase !== 'lobby') {
-    const mates = m.role === 'mafia' ? s.players.filter((p) => p.role === 'mafia' && p.id !== m.id).map((p) => esc(p.name)) : [];
-    rc = `<div class="role"><span class="emo">${ROLE[m.role].e}</span><div><b>${ROLE[m.role].n}</b>
-      <small>${m.role === 'mafia' ? `Mafiya jamoasi: ${mates.length ? mates.join(', ') : 'yolg‘iz o‘zingiz'}` : `Mafiya soni: ${s.mafiaN}`}</small></div></div>`;
+    const mates = isMafiaRole(m.role) ? s.players.filter((p) => isMafiaRole(p.role) && p.id !== m.id).map((p) => `${ROLE[p.role].e} ${esc(p.name)}`) : [];
+    const sub = isMafiaRole(m.role) ? `Mafiya jamoasi: ${mates.length ? mates.join(', ') : 'yolg‘iz o‘zingiz'}`
+      : m.role === 'serjant' ? `Komissar: ${s.players.filter((p) => p.role === 'komissar').map((p) => esc(p.name)).join(', ') || 'yo‘q'}`
+      : TEAM[ROLE[m.role].team];
+    const badges = `${m.shield ? ' 🛡' : ''}${m.docs ? ' 📄' : ''}`;
+    rc = `<div class="role"><span class="emo">${ROLE[m.role].e}</span><div><b>${ROLE[m.role].n}${badges}</b><small>${sub}</small></div></div>`;
   }
   $('#roleCard').innerHTML = rc;
+  renderRecap();
   $('#action').innerHTML = actionHTML(s);
-  $('#board').innerHTML = voteBoard(s);
   $('#players').innerHTML = s.players.map((p) => playerRow(p, s)).join('');
   $('#result').innerHTML = resultHTML(s);
 }
+
+const NIGHT_TXT = {
+  don: 'Siz hal qilasiz: bu tunda kim o‘ladi? Mafiya bilan Chat tabida kelishing.',
+  mafia: 'Don bilan kelishib nishon tanlang. Don tanlamasa, ko‘pchilik ovozi hisoblanadi.',
+  qotil: 'Yolg‘iz o‘zingiz. Kimni o‘ldirasiz?',
+  komissar: 'Tekshirasizmi yoki otasizmi? Rejimni tanlab, o‘yinchini bosing.',
+  serjant: 'Komissar ishlaridan xabardor bo‘lib turasiz. Tekshiruv natijalari pastda chiqadi.',
+  shifokor: 'Kimni qutqaramiz? O‘zingizni ham tanlashingiz mumkin.',
+  mashuqa: 'Kimni zararsizlantirasiz? U tunda harakat qila olmaydi, kunduzi gapira va ovoz bera olmaydi.',
+  advokat: 'Kimni himoya qilasiz? Komissar uni tekshirsa, tinch aholi bo‘lib ko‘rinadi.',
+  jurnalist: 'Ikki fuqaroni tanlang: ular bir qayiqdami yoki turli qayiqdami?',
+  tansoqchi: 'Kimni qo‘riqlaysiz? Unga hujum bo‘lsa, uning o‘rniga siz halok bo‘lasiz.',
+  daydi: 'Kimning uyiga shisha olgani borasiz? Qotillikka guvoh bo‘lib qolishingiz mumkin.',
+};
 
 function actionHTML(s) {
   const m = s.me;
@@ -259,25 +298,35 @@ function actionHTML(s) {
   if (m.spec) return note('Siz tomoshabinsiz. Keyingi o‘yinda qatnashasiz.');
   if (m.out) return note('Siz ilovadan chiqqaningiz uchun shu o‘yindan chiqarildingiz. Tomosha qilishingiz mumkin.');
   if (!m.alive) return note('Siz o‘lgansiz. Tomosha qilishingiz mumkin, yozib va gapirib bo‘lmaydi.');
-  const checks = m.checks.length
-    ? `<div class="checks">Tekshiruvlar: ${m.checks.map((c) => `${esc(c.name)} — ${c.team === 'mafia' ? 'mafiya' : 'tinch'}`).join('; ')}</div>` : '';
+  const intel = m.intel.length
+    ? `<div class="intel"><b>🔒 Maxfiy ma’lumotlar</b>${m.intel.slice().reverse().map((i) => `<p>${esc(i.text)} <small>(${i.round}-tun)</small></p>`).join('')}</div>` : '';
+  const silenced = m.silenced && (s.phase === 'day' || s.phase === 'vote')
+    ? '<p class="warn">💃🏼 Ma’shuqa sizni zararsizlantirdi: bugun gapira va ovoz bera olmaysiz.</p>' : '';
   if (s.phase === 'night') {
-    const t = {
-      mafia: 'Kimni o‘ldiramiz? Mafiya bilan Chat tabida kelishing.',
-      shifokor: 'Kimni qutqaramiz? O‘zingizni ham tanlashingiz mumkin.',
-      komissar: m.pick ? (m.pickMode === 'shoot' ? '🔫 Nishon tanlandi. Tong otganda o‘q uziladi.' : 'Natija sizga yuborildi, pastdagi tekshiruvlarga qarang.') : `Kimni tekshiramiz yoki otamiz? O‘qlar: ${m.bullets}.`,
-      fuqaro: 'Tun. Hamma uxlayapti. Tongni kuting.',
-    }[m.role];
-    return note(t, checks);
+    let t = NIGHT_TXT[m.role] || 'Tun. Hamma uxlayapti. Tongni kuting.';
+    let extra = '';
+    if (m.act === 'police') {
+      const mode = m.mode || polMode;
+      extra = `<div class="row2"><button data-mode="check" class="${mode === 'check' ? 'primary' : ''}">🔎 Tekshirish</button>
+        <button data-mode="kill" class="${mode === 'kill' ? 'primary' : ''}">🔫 Otish</button></div>`;
+    }
+    if (m.act === 'pair') {
+      extra = m.pick && m.pick2 ? `<p class="sel">Tanlandi: ${nameOf(m.pick)} va ${nameOf(m.pick2)} (qayta tanlashingiz mumkin)</p>`
+        : `<p class="sel">Tanlangan: ${pairSel.map(nameOf).join(', ') || 'hali yo‘q'} (${pairSel.length}/2)</p>`;
+    } else if (m.act && m.pick) extra += `<p class="sel">Tanlandi: ${nameOf(m.pick)}${m.act === 'police' ? (m.mode === 'kill' ? ' (otish)' : ' (tekshirish)') : ''}</p>`;
+    return note(t, extra) + intel;
   }
-  if (s.phase === 'day') return note('Muhokama. Chat yoki ovozli chat orqali gaplashing: kimdan shubhalanasiz?', checks);
+  if (s.phase === 'day') return note('Muhokama. Chat yoki ovozli chat orqali gaplashing: kimdan shubhalanasiz?', silenced) + intel;
   if (s.phase === 'vote') {
-    return note('Kimni osamiz? Ovozingizni tanlang.',
-      `<div class="row2"><button id="skip" ${m.pick === 'skip' ? 'class="primary"' : ''}>${m.pick === 'skip' ? '✓ ' : ''}Hech kimga</button></div>${checks}`);
+    const skipMarks = s.marks.filter((k) => k.k === 'vote' && k.to === 'skip');
+    return note('Kimni osamiz? Kim kimga ovoz berayotgani hammaga ko‘rinadi.',
+      `<div class="row2"><button id="skip" ${m.pick === 'skip' ? 'class="primary"' : ''} ${m.silenced ? 'disabled' : ''}>${m.pick === 'skip' ? '✓ ' : ''}Hech kimga</button>
+       ${skipMarks.map((k) => `<span class="chip">${nameOf(k.from)}</span>`).join('')}</div>${silenced}`) + intel;
   }
   if (s.phase === 'last') {
     const w = s.players.find((p) => p.id === s.lastWord);
-    return note(s.lastWord === m.id ? 'Sizning so‘nggi so‘zingiz. Gapiring!' : `${esc(w ? w.name : '')} so‘nggi so‘zni aytmoqda.`);
+    if (m.canTake) return note('💣 Siz osildingiz! O‘zingiz bilan kimni olib ketasiz? Ro‘yxatdan tanlang.');
+    return note(s.lastWord === m.id ? 'Sizning so‘nggi so‘zingiz. Gapiring!' : `${esc(w ? w.name : '')} so‘nggi so‘zni aytmoqda.`) + intel;
   }
   return '';
 }
@@ -285,15 +334,17 @@ function actionHTML(s) {
 function canTarget(s, p) {
   const m = s.me;
   if (!m || !m.alive || m.spec || m.out || !p.alive || !p.inGame) return false;
-  if (s.phase === 'night') {
-    if (m.role === 'mafia') return p.role !== 'mafia';
-    if (m.role === 'shifokor') return true;
-    if (m.role === 'komissar') return p.id !== m.id && !m.pick;
-    return false;
+  if (s.phase === 'last') return !!m.canTake && p.id !== m.id;
+  if (s.phase === 'vote') return p.id !== m.id && !m.silenced;
+  if (s.phase !== 'night') return false;
+  switch (m.act) {
+    case 'kill': return p.id !== m.id && !(isMafiaRole(m.role) && isMafiaRole(p.role));
+    case 'heal': case 'cover': return true;
+    case 'police': case 'block': case 'guard': case 'visit': case 'pair': return p.id !== m.id;
+    default: return false;
   }
-  if (s.phase === 'vote') return p.id !== m.id;
-  return false;
 }
+const VERB = { kill: 'O‘ldirish', heal: 'Qutqarish', block: 'Band qilish', cover: 'Himoya', pair: 'Tanlash', guard: 'Qo‘riqlash', visit: 'Borish' };
 
 function playerRow(p, s) {
   const m = s.me;
@@ -305,32 +356,32 @@ function playerRow(p, s) {
   else if (dead) sub.push(`${roleName(p.role)} · o‘lgan`);
   else if (p.role) sub.push(roleName(p.role));
   if (m && p.id === m.id) sub.unshift('siz');
-  const picked = m && m.pick === p.id;
-  const vcount = s.phase === 'vote' && s.votes ? Object.values(s.votes).filter((t) => t === p.id).length : 0;
-  const verb = s.phase === 'vote' ? 'Ovoz' : { mafia: 'O‘ldirish', shifokor: 'Qutqarish', komissar: 'Tekshirish' }[m && m.role] || '';
+  const picked = m && (m.pick === p.id || m.pick2 === p.id || (m.act === 'pair' && pairSel.includes(p.id)));
+  let verb = '';
+  if (s.phase === 'last') verb = 'Olib ketish';
+  else if (s.phase === 'vote') verb = 'Ovoz';
+  else if (m && m.act === 'police') verb = (m.mode || polMode) === 'kill' ? 'Otish' : 'Tekshirish';
+  else if (m) verb = VERB[m.act] || '';
   const can = canTarget(s, p);
-  const mine = (mode) => picked && (m.pickMode || 'check') === mode;
-  let btn = '';
-  if (s.phase === 'night' && m && m.role === 'komissar') {
-    if (can || picked) {
-      btn = `<button data-target="${p.id}" data-mode="check" class="${mine('check') ? 'primary' : ''}" ${can ? '' : 'disabled'}>${mine('check') ? '✓ ' : ''}Tekshirish</button>`;
-      if (m.bullets > 0 || mine('shoot')) {
-        btn += `<button data-target="${p.id}" data-mode="shoot" class="${mine('shoot') ? 'primary' : ''}" ${can && m.bullets > 0 ? '' : 'disabled'}>${mine('shoot') ? '✓ ' : '🔫 '}Otish</button>`;
-      }
-    }
-  } else if (can || (picked && s.phase !== 'lobby')) {
-    btn = `<button data-target="${p.id}" class="${picked ? 'primary' : ''}" ${can ? '' : 'disabled'}>${picked ? '✓ ' : ''}${verb}</button>`;
-  }
-  return `<div class="item ${dead ? 'dead' : ''} ${picked ? 'picked' : ''}" data-vid="${p.id}">
-    <div class="av">${esc(p.name.slice(0, 1).toUpperCase())}</div>
-    <div class="who"><b class="nm"><i class="dot ${p.online ? '' : 'off'}"></i>${esc(p.name)}</b><span>${sub.join(' · ')}</span></div>${vcount ? `<span class="vc" title="Ovozlar">${vcount}</span>` : ''}${btn}</div>`;
+  const btn = can || (picked && s.phase !== 'lobby')
+    ? `<button data-target="${p.id}" class="${picked ? 'primary' : ''}" ${can ? '' : 'disabled'}>${picked ? '✓ ' : ''}${verb}</button>` : '';
+  // Ovozlar / mafiya tanlovi: kim kimni tanlagani ko'rinib turadi
+  const mk = s.marks.filter((k) => k.to === p.id);
+  const total = mk.reduce((a, k) => a + k.w, 0);
+  const chips = mk.length
+    ? `<div class="chips">${mk.map((k) => `<span class="chip ${k.k}">${k.k === 'kill' ? '🔪' : '🗳'} ${nameOf(k.from)}${k.w > 1 ? ` ×${k.w}` : ''}</span>`).join('')}</div>` : '';
+  const badge = s.phase === 'vote' && mk.length ? `<span class="vcount">${total}</span>` : '';
+  return `<div class="item ${dead ? 'dead' : ''} ${picked ? 'picked' : ''}">
+    <div class="av">${cap1(p.name)}</div>
+    <div class="who"><b class="nm"><i class="dot ${p.online ? '' : 'off'}"></i>${esc(p.name)}</b><span>${sub.join(' · ')}</span>${chips}</div>${badge}${btn}</div>`;
 }
 
 function resultHTML(s) {
   if (s.phase !== 'lobby' || !s.result) return '';
   const r = s.result;
-  return `<h3>${r.winner === 'mafia' ? '🕴 Mafiya g‘alaba qildi' : '🏙 Shahar g‘alaba qildi'}</h3>
-    <div class="list">${r.players.map((p) => `<div class="item"><div class="av">${esc(p.name.slice(0, 1).toUpperCase())}</div>
+  const title = { mafia: '🤵🏻 Mafiya g‘alaba qildi', town: '🏙 Shahar g‘alaba qildi', qotil: '🔪 Qotil g‘alaba qildi', suidsid: '🤦🏼‍♂️ Suidsid g‘alaba qildi' }[r.winner];
+  return `<h3>${title}</h3>
+    <div class="list">${r.players.map((p) => `<div class="item"><div class="av">${cap1(p.name)}</div>
       <div class="who"><b class="nm">${esc(p.name)}</b><span>${roleName(p.role)}${p.out ? ' · ilovadan chiqqan' : p.alive ? '' : ' · o‘lgan'}</span></div>
       <span>${p.won ? '🏆' : ''}</span></div>`).join('')}</div>`;
 }
@@ -339,12 +390,21 @@ function resultHTML(s) {
 $('#action').addEventListener('click', (e) => {
   if (e.target.closest('#start')) socket.emit('start');
   if (e.target.closest('#skip')) socket.emit('vote', { target: 'skip' });
+  const md = e.target.closest('button[data-mode]');
+  if (md && S) { polMode = md.dataset.mode; renderGame(); }
 });
 $('#players').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-target]');
-  if (!b || !S) return;
+  if (!b || !S || !S.me) return;
   const target = Number(b.dataset.target);
-  socket.emit(S.phase === 'vote' ? 'vote' : 'action', { target, mode: b.dataset.mode });
+  if (S.phase === 'night' && S.me.act === 'pair') {
+    pairSel = pairSel.includes(target) ? pairSel.filter((x) => x !== target) : [...pairSel, target].slice(-2);
+    if (pairSel.length === 2) { socket.emit('action', { target: pairSel[0], target2: pairSel[1] }); pairSel = []; }
+    renderGame();
+    return;
+  }
+  if (S.phase === 'vote') socket.emit('vote', { target });
+  else socket.emit('action', { target, mode: S.me.act === 'police' ? (S.me.mode || polMode) : undefined });
   haptic('success');
 });
 
@@ -353,7 +413,8 @@ function addMsg(m) {
   const log = $('#log');
   const near = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
   const d = document.createElement('div');
-  if (m.sys) { d.className = 'm sys'; d.textContent = m.text; }
+  if (m.card) { d.className = 'm cardmsg'; d.innerHTML = cardHTML(m.card); }
+  else if (m.sys) { d.className = `m sys${m.ch === 'dm' ? ' dm' : ''}`; d.textContent = m.text; }
   else {
     d.className = `m${m.from === myId ? ' mine' : ''}${m.ch === 'mafia' ? ' mafia' : ''}`;
     d.innerHTML = `<span class="nm">${m.ch === 'mafia' ? '🕴 ' : ''}${esc(m.name)}</span>${esc(m.text)}`;
@@ -399,8 +460,7 @@ setInterval(() => {
     m.an.getByteTimeDomainData(m.buf);
     let max = 0;
     for (const v of m.buf) max = Math.max(max, Math.abs(v - 128));
-    const on = max > 12 && audible(id);
-    document.querySelectorAll(`[data-vid="${id}"]`).forEach((el) => el.classList.toggle('speaking', on));
+    document.querySelectorAll(`[data-vid="${id}"]`).forEach((el) => el.classList.toggle('speaking', max > 12));
   });
 }, 150);
 
@@ -443,14 +503,13 @@ function dropPeer(id) {
 function makePeer(id, initiator) {
   dropPeer(id);
   const pc = new RTCPeerConnection({ iceServers: cfg.ice });
-  const peer = { pc, audio: null, pending: [], sender: null, sending: true };
+  const peer = { pc, audio: null, pending: [] };
   Voice.peers.set(id, peer);
-  Voice.stream.getTracks().forEach((t) => { peer.sender = pc.addTrack(t, Voice.stream); });
+  Voice.stream.getTracks().forEach((t) => pc.addTrack(t, Voice.stream));
   pc.onicecandidate = (e) => { if (e.candidate) socket.emit('voice:signal', { to: id, data: { candidate: e.candidate } }); };
   pc.ontrack = (e) => {
     const a = document.createElement('audio');
     a.autoplay = true; a.playsInline = true;
-    a.muted = !canHear(id);
     a.srcObject = e.streams[0];
     document.body.appendChild(a);
     a.play().catch(() => { $('#unmute').hidden = false; });
@@ -463,7 +522,6 @@ function makePeer(id, initiator) {
       .then((o) => pc.setLocalDescription(o))
       .then(() => socket.emit('voice:signal', { to: id, data: { sdp: pc.localDescription } }));
   }
-  applyMic(); // o'lgan/tirik qoidasini yangi ulanishga ham qo'llash
   return peer;
 }
 socket.on('voice:peers', (ids) => { if (Voice.on) ids.forEach((id) => makePeer(id, true)); });
@@ -489,48 +547,18 @@ socket.on('voice:signal', async ({ from, data }) => {
   } catch (e) { console.warn('voice signal', e); }
 });
 
-/*
- * Kim kimni eshitadi:
- *  p.vc === 'pub'   — hamma eshitadi;
- *  p.vc === 'ghost' — faqat o'lganlar (ghost) eshitadi.
- * Qoida ikki tomonda qo'llanadi: jo'natuvchi ruxsat berilmagan odamlarga ovozni umuman yubormaydi,
- * qabul qiluvchi ham ruxsat berilmagan ovozni o'chirib qo'yadi.
- */
-const pinfo = (id) => (S ? S.players.find((p) => p.id === id) : null);
-function canHear(id) {
-  const m = S && S.me, p = pinfo(id);
-  if (!m || !p || !p.vc) return false;
-  return p.vc === 'pub' || !!m.ghost;
-}
-function canSendTo(id) {
-  const m = S && S.me, p = pinfo(id);
-  if (!m || !m.vc || Voice.muted) return false;
-  return m.vc === 'pub' || !!(p && p.ghost);
-}
-const audible = (id) => (id === myId ? !!(S && S.me && S.me.vc) && !Voice.muted : canHear(id));
-
+/** Mikrofon faqat o'yin qoidalari ruxsat bergan paytda ochiq */
 function applyMic() {
   if (!Voice.stream) return;
-  const track = Voice.stream.getAudioTracks()[0];
-  const on = !!(S && S.me && S.me.vc) && !Voice.muted;
-  Voice.stream.getAudioTracks().forEach((t) => { t.enabled = on; });
-  Voice.peers.forEach((peer, id) => {
-    const want = canSendTo(id);
-    if (peer.sender && track && peer.sending !== want) {
-      peer.sending = want;
-      peer.sender.replaceTrack(want ? track : null).catch(() => {});
-    }
-    if (peer.audio) peer.audio.muted = !canHear(id);
-  });
+  const ok = !!(S && S.me && S.me.canSpeak) && !Voice.muted;
+  Voice.stream.getAudioTracks().forEach((t) => { t.enabled = ok; });
   renderVoice();
 }
 function micStatus() {
-  const m = S && S.me;
   if (Voice.muted) return 'Siz mikrofonni o‘chirgansiz.';
-  if (!m) return '';
-  if (m.vc === 'ghost') return '👻 Siz o‘lgansiz: sizni faqat o‘lganlar eshitadi, siz esa hammani eshitasiz.';
-  if (m.vc === 'pub') return m.ghost ? 'So‘nggi so‘zingiz: hamma sizni eshitmoqda.' : 'Mikrofon yoqilgan, sizni eshitishmoqda.';
+  if (S && S.me && S.me.canSpeak) return 'Mikrofon yoqilgan, sizni eshitishmoqda.';
   if (S.phase === 'night') return 'Tun: mikrofon o‘chiq.';
+  if (S.me && !S.me.alive) return 'Siz o‘lgansiz: mikrofon o‘chiq.';
   return 'Hozir gapirish mumkin emas.';
 }
 function renderVoice() {
@@ -539,11 +567,12 @@ function renderVoice() {
   $('#micToggle').hidden = !Voice.on;
   $('#micToggle').textContent = Voice.muted ? 'Mikrofonni yoqish' : 'Mikrofonni o‘chirish';
   $('#voiceHint').textContent = Voice.on ? micStatus() : 'Ovozli chatga kirib, xonadagilar bilan gaplashing. Birinchi marta mikrofonga ruxsat so‘raladi.';
-  const inVoice = S.voice.map((id) => S.players.find((x) => x.id === id)).filter(Boolean)
-    .sort((a, b) => Number(a.ghost) - Number(b.ghost));
-  $('#voiceList').innerHTML = inVoice.length
-    ? inVoice.map((p) => `<div class="item ${p.ghost ? 'ghostly' : ''}" data-vid="${p.id}"><div class="av">${esc(p.name.slice(0, 1).toUpperCase())}</div>
-        <div class="who"><b class="nm">${esc(p.name)}${p.id === myId ? ' (siz)' : ''}</b>${p.ghost ? '<span>👻 o‘lgan</span>' : ''}</div></div>`).join('')
+  $('#voiceList').innerHTML = S.voice.length
+    ? S.voice.map((id) => {
+      const p = S.players.find((x) => x.id === id);
+      return `<div class="item" data-vid="${id}"><div class="av">${esc(p ? p.name.slice(0, 1).toUpperCase() : '?')}</div>
+        <div class="who"><b class="nm">${esc(p ? p.name : '')}${id === myId ? ' (siz)' : ''}</b></div></div>`;
+    }).join('')
     : '<div class="item"><div class="who"><span>Hozir ovozli chatda hech kim yo‘q.</span></div></div>';
 }
 $('#voiceJoin').onclick = () => (Voice.on ? voiceStop() : voiceJoin());

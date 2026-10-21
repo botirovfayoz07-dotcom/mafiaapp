@@ -13,6 +13,10 @@
 
   <!-- Bosh sahifa -->
   <section id="home" class="screen">
+    <div class="home-bar">
+      <button id="meBtn" class="mebtn" aria-label="Profil"><span id="meAv" class="av"></span><span class="mebtn-t"><b id="meName">…</b><small id="meBal"></small></span></button>
+      <button id="adminBtn" hidden>🛠 Admin</button>
+    </div>
     <div class="home-top">
       <h1>Mafia</h1>
       <p class="lead">Shahar uxlaydi. Mafiya uyg‘onadi. Kim yolg‘on gapiryapti?</p>
@@ -26,6 +30,18 @@
       </div>
     </div>
     <p class="rule">O‘yin davomida ilovadan chiqsangiz, rolingiz hammaga e’lon qilinadi va siz shu o‘yindan chiqarilasiz. Bu o‘yinchilarning ilova tashqarisida kelishib olishiga yo‘l qo‘ymaydi.</p>
+  </section>
+
+  <!-- Profil -->
+  <section id="profile" class="screen" hidden>
+    <header class="subhead"><button id="pBack" class="ghost">← Orqaga</button><b>Profil</b><span></span></header>
+    <div id="pBody" class="scroll"></div>
+  </section>
+
+  <!-- Admin panel -->
+  <section id="admin" class="screen" hidden>
+    <header class="subhead"><button id="aBack" class="ghost">← Orqaga</button><b>Admin panel</b><span></span></header>
+    <div id="aBody" class="scroll"></div>
   </section>
 
   <!-- Xona -->
@@ -43,9 +59,10 @@
 
     <div class="panes">
       <div id="pane-game" class="pane">
+        <div id="scene"></div>
         <div id="roleCard"></div>
+        <div id="recap"></div>
         <div id="action"></div>
-        <div id="board"></div>
         <div id="players" class="list"></div>
         <div id="result"></div>
       </div>
@@ -66,7 +83,7 @@
         </div>
         <button id="unmute" hidden>Ovozni yoqish</button>
         <div id="voiceList" class="list"></div>
-        <p class="hint">Kunduzi tirik o‘yinchilar gaplashadi, tunda ularning mikrofoni o‘chadi. 👻 O‘lganlar esa istalgan vaqt faqat o‘zaro gaplasha oladi: tiriklar ularni eshitmaydi, o‘lganlar tiriklarni eshitadi.</p>
+        <p class="hint">Tunda hamma uchun, o‘lganlar uchun va ovoz berish tugagandan keyin mikrofon avtomatik o‘chadi. Kunduzi tirik o‘yinchilar gaplasha oladi.</p>
       </div>
     </div>
 
@@ -78,10 +95,13 @@
   </section>
 
   <div id="overlay" hidden></div>
-  <div id="reveal" hidden role="alertdialog" aria-live="assertive"></div>
+  <div id="fx" hidden></div>
   <div id="toast" role="status"></div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="roles.js"></script>
+  <script src="scenes.js"></script>
   <script src="app.js"></script>
+  <script src="profile.js"></script>
 </body>
 </html>
